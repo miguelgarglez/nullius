@@ -333,6 +333,25 @@ function signedCurvature(ring: { i: number; j: number }[], step: number): Float3
   return out;
 }
 
+/** Where the expedition begins: the busiest archipelago cell near origin. */
+export function findHarbor(): { x: number; y: number } {
+  let best = { x: 0, y: 0 };
+  let bestScore = -1;
+  for (let cy = -2; cy <= 2; cy++) {
+    for (let cx = -2; cx <= 2; cx++) {
+      const fs = regionFeatures(cx, cy);
+      const score = fs.reduce((acc, f) => acc + (f.kind === 'island' ? 3 : f.prominence), 0);
+      // prefer nearer cells on ties so the harbour isn't a long voyage
+      const d = Math.hypot(cx, cy) * 0.5;
+      if (score - d > bestScore) {
+        bestScore = score - d;
+        best = { x: (cx + 0.5) * REGION, y: (cy + 0.5) * REGION };
+      }
+    }
+  }
+  return best;
+}
+
 /** All features whose region intersects a world-space bbox. */
 export function featuresInBox(x0: number, y0: number, x1: number, y1: number): Feature[] {
   const cx0 = Math.floor(x0 / REGION);

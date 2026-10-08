@@ -10,12 +10,14 @@ const MAX_LOD = 5;
 const TILE_BUDGET_PER_FRAME = 2;
 
 export interface ClaimLike {
-  feature_id: string;
   name: string;
-  skipper: string;
+  sailor: string;
+}
+
+export interface ShipLike {
   x: number;
   y: number;
-  kind: string;
+  sailor: string;
 }
 
 export class WorldView {
@@ -32,6 +34,8 @@ export class WorldView {
   private dragMoved = 0;
   private features: Feature[] = [];
   private claims = new Map<string, ClaimLike>();
+  private claimBirth = new Map<string, number>();
+  private ships: ShipLike[] = [];
   private onFeatures: (fs: Feature[]) => void;
   private onTap: ((wx: number, wy: number) => void) | null = null;
   private reduced = false;
@@ -79,7 +83,14 @@ export class WorldView {
   }
 
   setClaims(map: Map<string, ClaimLike>) {
+    // diff so fresh names can ink themselves in
+    for (const k of map.keys()) {
+      if (!this.claims.has(k)) this.claimBirth.set(k, performance.now());
+    }
     this.claims = map;
+  }
+  setShips(ships: ShipLike[]) {
+    this.ships = ships;
   }
   setOnTap(fn: (wx: number, wy: number) => void) {
     this.onTap = fn;
@@ -308,6 +319,7 @@ export class WorldView {
     // -- labels + pennants (screen-space overlay pass, world coords) -----
     this.features = featuresInBox(vx0, vy0, vx1, vy1);
     this.drawLabels(ctx);
+    this.drawShips(ctx);
 
     ctx.restore();
 
@@ -335,24 +347,39 @@ export class WorldView {
     const px = (w: number) => w / this.cam.scale; // world units for px size
     for (const f of this.features) {
       const claim = this.claims.get(f.id);
+      // uncharted pennants thin out when zoomed far out
+      if (!claim && f.prominence < 0.45 && this.cam.scale < 0.7) continue;
       const lx = f.x;
       const ly = f.y;
       ctx.save();
       ctx.translate(lx, ly);
       if (claim) {
-        // engraved name plate on the chart
+        // engraved name plate — fresh names ink themselves in
+        const birth = this.claimBirth.get(f.id);
+        const age = birth ? performance.now() - birth : Infinity;
+        const t = this.reduced ? 1 : Math.min(1, age / 900);
+        const ease = 1 - (1 - t) * (1 - t) * (1 - t);
         const fs = Math.max(px(11), px(9) + f.prominence * px(6));
         ctx.font = `italic ${fs}px "EB Garamond", Georgia, serif`;
+        ctx.globalAlpha = ease;
         ctx.fillStyle = '#22303B';
         ctx.textAlign = 'center';
-        ctx.fillText(claim.name, 0, px(-10));
+        ctx.fillText(claim.name, 0, px(-10) - (1 - ease) * px(3));
         ctx.strokeStyle = 'rgba(34,48,59,0.5)';
         ctx.lineWidth = px(0.8);
-        const twd = ctx.measureText(claim.name).width;
+        const twd = ctx.measureText(claim.name).width * ease;
         ctx.beginPath();
         ctx.moveTo(-twd / 2, px(-4));
         ctx.lineTo(twd / 2, px(-4));
         ctx.stroke();
+        ctx.globalAlpha = 1;
+        // a small vermilion seal while the ink is fresh
+        if (age < 120000) {
+          ctx.fillStyle = 'rgba(179,58,43,0.85)';
+          ctx.beginPath();
+          ctx.arc(ctx.measureText(claim.name).width / 2 + px(8), px(-12), px(2.6), 0, Math.PI * 2);
+          ctx.fill();
+        }
       } else {
         // uncharted pennant
         const s = px(1);
@@ -416,6 +443,43 @@ export class WorldView {
       ctx.arc(cx, cy, rosePx * 1.25, 0, Math.PI * 2);
     }
     ctx.stroke();
+  }
+
+  /** other sailors abroad — small engraved ships under sail */
+  private drawShips(ctx: CanvasRenderingContext2D) {
+    const px = (w: number) => w / this.cam.scale;
+    for (const s of this.ships) {
+      ctx.save();
+      ctx.translate(s.x, s.y);
+      const sc = px(1);
+      ctx.strokeStyle = 'rgba(34,48,59,0.85)';
+      ctx.fillStyle = 'rgba(34,48,59,0.85)';
+      ctx.lineWidth = px(1.1);
+      ctx.lineCap = 'round';
+      // hull
+      ctx.beginPath();
+      ctx.moveTo(-7 * sc, 0);
+      ctx.quadraticCurveTo(0, 4.5 * sc, 7 * sc, 0);
+      ctx.stroke();
+      // mast + square sail
+      ctx.beginPath();
+      ctx.moveTo(0, 0.5 * sc);
+      ctx.lineTo(0, -9 * sc);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(0, -8.5 * sc);
+      ctx.quadraticCurveTo(4.5 * sc, -5 * sc, 0, -1.5 * sc);
+      ctx.closePath();
+      ctx.fill();
+      // name in fine italic when close enough to read
+      if (this.cam.scale > 0.5 && s.sailor) {
+        ctx.font = `italic ${px(9.5)}px "EB Garamond", Georgia, serif`;
+        ctx.fillStyle = 'rgba(93,109,117,0.9)';
+        ctx.textAlign = 'center';
+        ctx.fillText(s.sailor, 0, px(12));
+      }
+      ctx.restore();
+    }
   }
 
   private drawVignette(ctx: CanvasRenderingContext2D, w: number, h: number) {

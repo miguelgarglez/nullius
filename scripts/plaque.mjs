@@ -1,0 +1,11 @@
+import { chromium } from 'playwright';
+const browser = await chromium.launch();
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+await page.goto('http://localhost:5177/#0,0,1.6', { waitUntil: 'networkidle' });
+await page.waitForTimeout(1500);
+const btn = page.locator('.intro-card button');
+if (await btn.count()) await btn.click();
+await page.mouse.click(262, 501);
+await page.waitForTimeout(500);
+await page.screenshot({ path: '/tmp/nullius-plaque.png' });
+await browser.close();
