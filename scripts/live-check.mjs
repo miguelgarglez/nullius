@@ -1,0 +1,12 @@
+import { chromium } from 'playwright';
+const browser = await chromium.launch();
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+const errs = [];
+page.on('console', (m) => { if (m.type() === 'error') errs.push(m.text()); });
+await page.goto('https://nullius-three.vercel.app/', { waitUntil: 'networkidle' });
+await page.waitForTimeout(2500);
+console.log('cartouche:', await page.locator('.cartouche-line').textContent());
+console.log('intro:', await page.locator('.intro-card').count());
+await page.screenshot({ path: '/tmp/nullius-live.png' });
+console.log('console errors:', errs.length, errs.slice(0, 4));
+await browser.close();

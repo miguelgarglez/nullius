@@ -1,4 +1,7 @@
+// NOTE: submits REAL claims to the configured ledger.
+// Guarded: requires NULLIUS_WRITE_OK=1.
 import { chromium } from 'playwright';
+if (!process.env.NULLIUS_WRITE_OK) { console.log('set NULLIUS_WRITE_OK=1 — this writes real claims'); process.exit(2); }
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 page.on('console', (m) => { if (m.type() === 'error') console.log('CONSOLE ERR:', m.text()); });

@@ -70,6 +70,15 @@ export async function claimFeature(
   return { ok: true, claim: data as Claim };
 }
 
+/** One feature's row — used after a lost race to learn the winning name. */
+export async function fetchClaim(featureKey: string): Promise<Claim | null> {
+  const c = client();
+  if (!c) return null;
+  const { data, error } = await table().select('*').eq('feature_key', featureKey).maybeSingle();
+  if (error || !data) return null;
+  return data as Claim;
+}
+
 /** Live feed of new claims — every sailor's chart updates together. */
 export function subscribeClaims(onClaim: (c: Claim) => void): () => void {
   const c = client();

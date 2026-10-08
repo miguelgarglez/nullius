@@ -7,7 +7,9 @@ import { hash2f } from '../world/prng';
 // camera moves; the imperative engine owns the chart.
 
 const MAX_LOD = 5;
+const MIN_LOD = -2; // coarse tiles for the long zoom-out
 const TILE_BUDGET_PER_FRAME = 2;
+const TILE_CACHE_CAP = 900;
 
 export interface ClaimLike {
   name: string;
@@ -206,6 +208,9 @@ export class WorldView {
     );
 
     this.listen(window, 'keydown', (e) => {
+      // don't hijack typing in inputs or dialogs
+      const t = e.target as HTMLElement | null;
+      if (t && (t.closest('input, textarea, [contenteditable], .intro-scrim'))) return;
       const step = 60 / this.cam.scale;
       if (e.key === 'ArrowLeft') this.cam.x -= step;
       if (e.key === 'ArrowRight') this.cam.x += step;
@@ -257,7 +262,7 @@ export class WorldView {
     const vy1 = cam.y + h / 2 / cam.scale;
 
     // pick lod: want ~ tile world ≈ 256px * (1/scale) → upp ≈ 1/scale
-    const lod = Math.max(0, Math.min(MAX_LOD, Math.round(Math.log2(UPP0 * cam.scale))));
+    const lod = Math.max(MIN_LOD, Math.min(MAX_LOD, Math.round(Math.log2(UPP0 * cam.scale))));
     const tw = tileWorld(lod);
     const tx0 = Math.floor(vx0 / tw);
     const ty0 = Math.floor(vy0 / tw);
@@ -305,8 +310,8 @@ export class WorldView {
     }
 
     // evict far tiles
-    if (this.tiles.size > 420) {
-      let drop = this.tiles.size - 420;
+    if (this.tiles.size > TILE_CACHE_CAP) {
+      let drop = this.tiles.size - TILE_CACHE_CAP;
       for (const k of this.tiles.keys()) {
         this.tiles.delete(k);
         if (--drop <= 0) break;

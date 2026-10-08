@@ -84,9 +84,10 @@ export function renderTile(lod: number, tx: number, ty: number): HTMLCanvasEleme
     }
   }
 
-  const sc = size / (G - 2 * M - 1); // grid coord → px
-  const ox = M * sc;
-  const oy = M * sc;
+  // grid coord → px: sample i sits at world (i-M)*cellW → px (i-M)*size/N
+  const sc = size / N;
+  const ox = -M * sc;
+  const oy = -M * sc;
 
   // -- base paper ------------------------------------------------------
   ctx.fillStyle = PAPER;

@@ -287,3 +287,100 @@ body,
     font-size: 11px;
   }
 }
+
+/* -- the logbook: places in view, keyboard-operable ---------------------- */
+.logbook-toggle {
+  position: absolute;
+  right: 20px;
+  bottom: 20px;
+  font-family: 'IM Fell English', serif;
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  color: var(--ink-soft);
+  background: rgba(245, 239, 221, 0.85);
+  border: 1px solid rgba(34, 48, 59, 0.3);
+  padding: 7px 14px;
+  cursor: pointer;
+  z-index: 20;
+}
+.logbook-toggle:hover,
+.logbook-toggle[aria-expanded='true'] {
+  color: var(--ink);
+  border-color: var(--ink);
+}
+.logbook {
+  position: absolute;
+  right: 20px;
+  bottom: 58px;
+  width: 240px;
+  max-height: 50vh;
+  overflow-y: auto;
+  background: #f5efdd;
+  border: 1px solid rgba(34, 48, 59, 0.3);
+  box-shadow: 0 10px 28px rgba(34, 48, 59, 0.18);
+  z-index: 25;
+  animation: slip-in 0.25s var(--ease-out);
+}
+.logbook-head {
+  font-family: 'IM Fell English', serif;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: var(--ink-soft);
+  padding: 10px 14px 6px;
+  border-bottom: 1px solid rgba(34, 48, 59, 0.15);
+}
+.logbook ul {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+}
+.logbook li button {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 7px 14px;
+  cursor: pointer;
+  font-family: 'EB Garamond', serif;
+  font-size: 14px;
+  color: var(--ink);
+  text-align: left;
+}
+.logbook li button:hover,
+.logbook li button:focus-visible {
+  background: rgba(179, 58, 43, 0.08);
+  outline: none;
+}
+.logbook .lb-name {
+  font-style: italic;
+}
+.logbook .lb-uncharted {
+  color: var(--ink-soft);
+}
+.logbook .lb-kind {
+  font-family: 'IM Fell English', serif;
+  font-size: 11px;
+  color: var(--ink-soft);
+  align-self: center;
+  white-space: nowrap;
+}
+.logbook .lb-empty {
+  padding: 10px 14px;
+  font-style: italic;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+@media (max-width: 520px) {
+  .logbook-toggle {
+    right: 14px;
+    bottom: 40px;
+  }
+  .logbook {
+    right: 14px;
+    bottom: 78px;
+    width: min(240px, calc(100vw - 28px));
+  }
+}
