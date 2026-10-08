@@ -1,0 +1,81 @@
+:root {
+  --vellum: #f0e9d6;
+  --ink: #22303b;
+  --ink-soft: #5d6d75;
+  --vermilion: #b33a2b;
+  --verdigris: #4e7e74;
+  --brass: #a8834f;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--vellum);
+  color: var(--ink);
+  font-family: 'EB Garamond', Georgia, serif;
+}
+
+.app {
+  position: relative;
+  height: 100%;
+}
+
+.chart {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  touch-action: none;
+}
+.chart:active {
+  cursor: grabbing;
+}
+
+.masthead {
+  position: absolute;
+  top: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  pointer-events: none;
+  user-select: none;
+}
+.masthead h1 {
+  font-family: 'IM Fell English SC', 'IM Fell English', serif;
+  font-weight: 400;
+  font-size: 30px;
+  letter-spacing: 0.34em;
+  margin: 0;
+  color: var(--ink);
+  text-shadow: 0 0 18px rgba(240, 233, 214, 0.9);
+}
+.masthead .sub {
+  font-family: 'EB Garamond', serif;
+  font-style: italic;
+  font-size: 14px;
+  letter-spacing: 0.12em;
+  color: var(--ink-soft);
+  margin: 2px 0 0;
+}
+
+.cartouche {
+  position: absolute;
+  left: 24px;
+  bottom: 22px;
+  pointer-events: none;
+  user-select: none;
+}
+.cartouche-line {
+  font-family: 'IM Fell English', serif;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
