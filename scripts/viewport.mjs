@@ -1,0 +1,12 @@
+import { chromium } from 'playwright';
+const browser = await chromium.launch();
+const page = await browser.newPage({ viewport: { width: 375, height: 667 } });
+page.on('console', (m) => { if (m.type() === 'error') console.log('ERR:', m.text()); });
+await page.goto('http://localhost:5177/', { waitUntil: 'networkidle' });
+await page.waitForTimeout(1600);
+await page.screenshot({ path: '/tmp/nullius-375-intro.png' });
+const btn = page.locator('.intro-card button');
+if (await btn.count()) await btn.click();
+await page.waitForTimeout(800);
+await page.screenshot({ path: '/tmp/nullius-375.png' });
+await browser.close();

@@ -99,6 +99,11 @@ export default function App() {
       () => sailorRef.current,
     );
 
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSelected(null);
+    };
+    window.addEventListener('keydown', onEsc);
+
     // keep the deep link fresh so any view is shareable
     const linkTimer = setInterval(() => {
       const c = v.camera;
@@ -109,6 +114,7 @@ export default function App() {
     return () => {
       unsub();
       unPresence();
+      window.removeEventListener('keydown', onEsc);
       clearInterval(linkTimer);
       if (toastTimer.current) clearTimeout(toastTimer.current);
       v.destroy();
