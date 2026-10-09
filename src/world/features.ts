@@ -333,7 +333,11 @@ function signedCurvature(ring: { i: number; j: number }[], step: number): Float3
   return out;
 }
 
-/** Where the expedition begins: the busiest archipelago cell near origin. */
+/** Where the expedition begins: a sheltered anchorage in the busiest
+ *  archipelago cell near origin — hull in the water, coasts on every
+ *  side, pennants in view. We score each cell by its landmarks, then
+ *  anchor between the two most prominent, nudged offshore if the
+ *  midpoint sits on land. */
 export function findHarbor(): { x: number; y: number } {
   let best = { x: 0, y: 0 };
   let bestScore = -1;
@@ -345,7 +349,34 @@ export function findHarbor(): { x: number; y: number } {
       const d = Math.hypot(cx, cy) * 0.5;
       if (score - d > bestScore) {
         bestScore = score - d;
-        best = { x: (cx + 0.5) * REGION, y: (cy + 0.5) * REGION };
+        if (fs.length >= 2) {
+          const [a, b] = [fs[0], fs[1]];
+          const mx = (a.x + b.x) / 2;
+          const my = (a.y + b.y) / 2;
+          let x = mx;
+          let y = my;
+          // walk offshore along the pair's perpendicular, either bearing,
+          // until the keel floats — never farther than the pair's separation
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          const len = Math.hypot(dx, dy) || 1;
+          const nx = -dy / len;
+          const ny = dx / len;
+          for (let s = 24; s <= len && height(x, y) > -0.02; s += 24) {
+            for (const side of [1, -1]) {
+              const tx = mx + nx * s * side;
+              const ty = my + ny * s * side;
+              if (height(tx, ty) <= -0.02) {
+                x = tx;
+                y = ty;
+                break;
+              }
+            }
+          }
+          best = { x, y };
+        } else {
+          best = { x: (cx + 0.5) * REGION, y: (cy + 0.5) * REGION };
+        }
       }
     }
   }

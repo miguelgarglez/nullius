@@ -51,7 +51,8 @@ export function FirstNote(props: {
       <span className="fn-mark">※</span>
       {step === 'sail' && (
         <span>
-          <b>drag</b> to sail · <b>scroll or pinch</b> to zoom · arrow keys steer
+          <b>drag</b> to sail · <b>scroll or pinch</b> to zoom · a <b>red pennant</b> is a place waiting to
+          be named
         </span>
       )}
       {step === 'name' && (

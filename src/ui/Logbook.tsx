@@ -31,7 +31,7 @@ export function Logbook(props: {
         aria-expanded={props.open}
         aria-label="Open the logbook: places in view"
       >
-        logbook
+        logbook — places in view
       </button>
       {props.open && (
         <nav className="logbook" aria-label="Places in view">

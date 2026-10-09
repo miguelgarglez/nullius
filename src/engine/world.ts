@@ -27,6 +27,7 @@ export class WorldView {
   private ctx: CanvasRenderingContext2D;
   private cam: Camera = { x: 0, y: 0, scale: 0.9 };
   private vel = { x: 0, y: 0 };
+  private guide: Feature | null = null;
   private tiles = new Map<string, HTMLCanvasElement>();
   private queue: { lod: number; tx: number; ty: number }[] = [];
   private inQueue = new Set<string>();
@@ -128,6 +129,11 @@ export class WorldView {
   /** called after each rendered frame — lets React overlays ride the camera */
   setOnFrame(fn: () => void) {
     this.onFrame = fn;
+  }
+
+  /** the pennant the first-run note is pointing at — gets a quiet ring */
+  setGuideTarget(f: Feature | null) {
+    this.guide = f;
   }
 
   /** the pennants that are actually drawn and hittable right now */
@@ -568,10 +574,26 @@ export class WorldView {
       const claim = this.claims.get(f.id);
       // uncharted pennants thin out when zoomed far out
       if (!claim && f.prominence < 0.45 && this.cam.scale < 0.7) continue;
-      const lx = f.x;
-      const ly = f.y;
+      let lx = f.x;
+      let ly = f.y;
+      if (claim) {
+        // keep the whole name on the chart: near an edge the label slides
+        // to stay legible while its survey mark stays on the exact point
+        const fs0 = px(14) + f.prominence * px(11);
+        ctx.font = `italic ${fs0}px "EB Garamond", Georgia, serif`;
+        const half = (ctx.measureText(claim.name).width / 2) * this.cam.scale;
+        const cw = this.canvas.clientWidth;
+        const ch = this.canvas.clientHeight;
+        const sx = (f.x - this.cam.x) * this.cam.scale + cw / 2;
+        const sy = (f.y - this.cam.y) * this.cam.scale + ch / 2;
+        lx += (Math.min(Math.max(sx, 12 + half), cw - 12 - half) - sx) / this.cam.scale;
+        // the name rides above the mark — drop it below when there's no
+        // headroom, clear of the mark itself
+        const top = sy - (fs0 + 14) * this.cam.scale;
+        if (top < 10) ly = f.y + (px(14) + px(26));
+      }
       ctx.save();
-      ctx.translate(lx, ly);
+      ctx.translate(f.x, f.y);
       if (claim) {
         // the survey mark: a benchmark cross at the exact point, forever
         ctx.strokeStyle = 'rgba(34,48,59,0.8)';
@@ -588,13 +610,16 @@ export class WorldView {
         ctx.moveTo(0, bm * 0.6);
         ctx.lineTo(0, bm * 1.5);
         ctx.stroke();
+        ctx.restore();
+        ctx.save();
+        // the inscription sits at the clamped spot, not the mark
+        ctx.translate(lx, ly);
 
         // the name inks letter by letter — a surveyor's hand, not a fade.
         // settled names carry cartographic weight, not caption size
         const birth = this.claimBirth.get(f.id);
         const age = birth ? performance.now() - birth : Infinity;
-        const fs = px(14) + f.prominence * px(11);
-        ctx.font = `italic ${fs}px "EB Garamond", Georgia, serif`;
+        ctx.font = `italic ${px(14) + f.prominence * px(11)}px "EB Garamond", Georgia, serif`;
         ctx.fillStyle = '#22303B';
         const chars = Math.ceil(Math.min(1, age / (this.reduced ? 1 : 1100)) * claim.name.length);
         const shown = claim.name.slice(0, chars);
@@ -622,6 +647,18 @@ export class WorldView {
         const hot = f === this.hovered;
         const press = f === this.pressed;
         const s = px(1);
+        if (f === this.guide) {
+          // the first-run cue: a survey ring that breathes around one
+          // pennant until the visitor acts on it (still under reduced motion)
+          const t = this.reduced ? 0.45 : (performance.now() % 1800) / 1800;
+          ctx.strokeStyle = `rgba(179,58,43,${0.55 * (1 - t)})`;
+          ctx.lineWidth = px(1.3);
+          ctx.setLineDash([px(3), px(3.5)]);
+          ctx.beginPath();
+          ctx.arc(0, px(-7), px(9 + t * 9), 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
         ctx.strokeStyle = '#B33A2B';
         ctx.lineWidth = px(1.4);
         ctx.beginPath();

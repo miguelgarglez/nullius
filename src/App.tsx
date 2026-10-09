@@ -204,7 +204,13 @@ export default function App() {
         clearCeremony();
         setSelected(null);
         setReceipt(null);
-        ref.current?.focus();
+        // every transient layer answers the same key; the logbook's
+        // toggle gets its focus back
+        setLogOpen((o) => {
+          if (o) document.querySelector<HTMLElement>('.logbook-toggle')?.focus();
+          return false;
+        });
+        if (!document.querySelector('.claim-card, .ledger-entry, .logbook')) ref.current?.focus();
       }
     };
     window.addEventListener('keydown', onEsc);
@@ -243,28 +249,34 @@ export default function App() {
       setNamed(true);
       buzz(12);
       // stage 1 — the slip sinks into the chart where the name now lives
+      // under reduced motion the ceremony arrives already settled —
+      // no sink delay, no letter-by-letter wait, entry at once
+      const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
       const s = viewRef.current?.toScreen(target.f.x, target.f.y);
       const cardEl = document.querySelector<HTMLElement>('.claim-card');
-      if (s && cardEl) {
+      if (s && cardEl && !reduced) {
         const r = cardEl.getBoundingClientRect();
         setSinking({ dx: s.x - (r.left + r.width / 2), dy: s.y - (r.top + r.height / 2) });
       }
       const claim = res.claim;
       const feat = target.f;
-      // stage 2 — the slip is gone; the name inks letter by letter (~1.1s)
       ceremonyTimers.current.push(
-        setTimeout(() => {
-          setSinking(null);
-          setSelected(null);
-        }, 380),
+        setTimeout(
+          () => {
+            setSinking(null);
+            setSelected(null);
+          },
+          reduced ? 60 : 380,
+        ),
       );
-      // stage 3 — only once the ink settles does the ledger entry appear,
-      // placed below the mark so it never covers its own reveal
       ceremonyTimers.current.push(
-        setTimeout(() => {
-          const sc = viewRef.current?.toScreen(feat.x, feat.y);
-          setReceipt({ f: feat, claim, sx: sc?.x ?? 0, sy: sc?.y ?? 0 });
-        }, 1400),
+        setTimeout(
+          () => {
+            const sc = viewRef.current?.toScreen(feat.x, feat.y);
+            setReceipt({ f: feat, claim, sx: sc?.x ?? 0, sy: sc?.y ?? 0 });
+          },
+          reduced ? 120 : 1400,
+        ),
       );
     } else if (res.reason === 'taken') {
       const c = await fetchClaim(target.f.id);
@@ -279,6 +291,19 @@ export default function App() {
       setCardError(res.reason === 'offline' ? 'no signal — the ledger is unreachable' : 'the ink would not take — try again');
     }
   };
+
+  // the first-run cue: the nearest unclaimed pennant in view wears a
+  // breathing survey ring until the visitor acts — names a place,
+  // opens a card, or dismisses the note
+  useEffect(() => {
+    const v = viewRef.current;
+    if (!v) return;
+    if (named || noteDismissed || selected) {
+      v.setGuideTarget(null);
+      return;
+    }
+    v.setGuideTarget(features.find((f) => !claims.has(f.id)) ?? null);
+  }, [features, claims, named, noteDismissed, selected]);
 
   const selClaim = selected ? claims.get(selected.f.id) : undefined;
 
@@ -300,9 +325,17 @@ export default function App() {
               <br />
             </>
           )}
-          {online
-            ? `${abroad} ${abroad === 1 ? 'sailor' : 'sailors'} abroad · ${claims.size} ${claims.size === 1 ? 'name' : 'names'} given`
-            : 'ledger unreachable — sailing offline'}
+          {online ? (
+            <>
+              {abroad} {abroad === 1 ? 'sailor' : 'sailors'} abroad ·{' '}
+              <span className="count" key={claims.size}>
+                {claims.size}
+              </span>{' '}
+              {claims.size === 1 ? 'name' : 'names'} given
+            </>
+          ) : (
+            'ledger unreachable — sailing offline'
+          )}
         </p>
       </header>
       {selected && (

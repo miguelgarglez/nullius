@@ -42,6 +42,7 @@ function useAnchored(
     if (y < m) y = m;
     el.style.left = `${x}px`;
     el.style.top = `${y}px`;
+    el.dataset.side = y >= anchor.sy ? 'below' : 'above'; // the leader follows the true side
     el.style.visibility = 'visible';
   });
   return ref;
@@ -62,15 +63,18 @@ export function ClaimCard(props: {
   const { feature, claim, sailor, busy, taken } = props;
   const [name, setName] = useState('');
   const [who, setWho] = useState(sailor);
+  // whether this card opened with an empty log — the sailor line stays
+  // mounted for the card's life so the sink never loses its geometry
+  const [needsWho] = useState(() => !sailor);
   const inputRef = useRef<HTMLInputElement>(null);
   const cardRef = useAnchored(props.anchor, { prefer: 'above', gap: 30 });
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<'idle' | 'ok' | 'fail'>('idle');
 
   // reset when the card moves to a new feature — never mid-ceremony
   useEffect(() => {
     setName('');
     setWho(sailor);
-    setCopied(false);
+    setCopied('idle');
     const t = setTimeout(() => inputRef.current?.focus(), 60);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -84,9 +88,9 @@ export function ClaimCard(props: {
   const copyLink = async () => {
     try {
       await navigator.clipboard.writeText(link);
-      setCopied(true);
+      setCopied('ok');
     } catch {
-      window.prompt('copy the bearing by hand', link);
+      setCopied('fail');
     }
   };
 
@@ -105,8 +109,18 @@ export function ClaimCard(props: {
             charted by <em>{claim.sailor}</em> — ref {Math.round(feature.x)} · {Math.round(feature.y)}
           </div>
           <button className="plaque-share" onClick={copyLink}>
-            {copied ? 'bearing copied' : 'copy bearing'}
+            {copied === 'ok' ? 'bearing copied' : 'copy bearing'}
           </button>
+          {copied === 'fail' && (
+            <input
+              className="le-link"
+              readOnly
+              value={link}
+              onFocus={(e) => e.target.select()}
+              aria-label="Chart link — copy by hand"
+              ref={(el) => el?.focus()}
+            />
+          )}
         </div>
       ) : (
         <form
@@ -133,7 +147,7 @@ export function ClaimCard(props: {
                 aria-label={`Name for this ${noun}`}
                 disabled={busy}
               />
-              {!sailor && (
+              {needsWho && (
                 <input
                   value={who}
                   onChange={(e) => setWho(e.target.value)}
@@ -192,7 +206,14 @@ export function Receipt(props: {
         <button onClick={props.onClose}>sail on</button>
       </div>
       {copied === 'fail' && (
-        <input className="le-link" readOnly value={link} onFocus={(e) => e.target.select()} aria-label="Chart link — copy by hand" />
+        <input
+          className="le-link"
+          readOnly
+          value={link}
+          onFocus={(e) => e.target.select()}
+          aria-label="Chart link — copy by hand"
+          ref={(el) => el?.focus()}
+        />
       )}
     </div>
   );
