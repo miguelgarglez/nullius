@@ -114,37 +114,40 @@ export function ClaimCard(props: {
   );
 }
 
-// The receipt: what a confirmed claim leaves behind — name, surveyor,
-// coordinates, and a way to hand the view to someone else.
+// The ledger entry: what a confirmed claim leaves in the margin — a
+// notation tied to its survey mark by a leader, not a floating paper.
+// It stays until dismissed; the link is always recoverable.
 export function Receipt(props: {
   claim: Claim;
   onClose: () => void;
   style: { left: number; top: number };
 }) {
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<'idle' | 'ok' | 'fail'>('idle');
   const { claim } = props;
+  const link = `${location.origin}${location.pathname}#${Math.round(claim.x)},${Math.round(claim.y)},1.6`;
   const copyLink = async () => {
-    const link = `${location.origin}${location.pathname}#${Math.round(claim.x)},${Math.round(claim.y)},1.6`;
     try {
       await navigator.clipboard.writeText(link);
-      setCopied(true);
+      setCopied('ok');
     } catch {
-      setCopied(false);
+      setCopied('fail');
     }
   };
   return (
-    <div className="claim-card receipt" style={props.style} role="status" aria-live="polite">
-      <div className="claim-kicker">inked forever</div>
-      <div className="claim-plaque">
-        <div className="claim-name">{claim.name}</div>
-        <div className="claim-byline">
-          charted by <em>{claim.sailor}</em> · {Math.round(claim.x)}° {Math.round(claim.y)}′
+    <div className="ledger-entry" style={props.style} role="status" aria-live="polite">
+      <div className="le-kicker">ENTERED IN THE CHART</div>
+      <div className="le-line">
+        <em>{claim.name}</em>, charted by {claim.sailor} — ref {Math.round(claim.x)} ·{' '}
+        {Math.round(claim.y)}
+      </div>
+      {copied === 'fail' ? (
+        <input className="le-link" readOnly value={link} onFocus={(e) => e.target.select()} />
+      ) : (
+        <div className="le-actions">
+          <button onClick={copyLink}>{copied === 'ok' ? 'bearing copied' : 'copy bearing'}</button>
+          <button onClick={props.onClose}>sail on</button>
         </div>
-      </div>
-      <div className="receipt-actions">
-        <button onClick={copyLink}>{copied ? 'chart link copied' : 'copy chart link'}</button>
-        <button onClick={props.onClose}>sail on</button>
-      </div>
+      )}
     </div>
   );
 }

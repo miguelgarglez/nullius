@@ -3,11 +3,18 @@ import { useEffect, useState } from 'react';
 const SEEN_KEY = 'nullius.seen-intro';
 
 // First-run guidance as marginalia, not a modal. The note stages its
-// advice: sail first, then name. It retires itself once both are done.
+// advice: sail first, then name. It retires itself once both are done,
+// and the "?" in the margin calls it back.
 
 type Step = 'sail' | 'name' | 'done';
 
-export function FirstNote(props: { sailed: boolean; named: boolean }) {
+export function FirstNote(props: {
+  sailed: boolean;
+  named: boolean;
+  dismissed: boolean;
+  onDismiss: (d: boolean) => void;
+  nudge: number;
+}) {
   const [step, setStep] = useState<Step>(() => {
     try {
       return localStorage.getItem(SEEN_KEY) ? 'done' : 'sail';
@@ -15,7 +22,11 @@ export function FirstNote(props: { sailed: boolean; named: boolean }) {
       return 'sail';
     }
   });
-  const [dismissed, setDismissed] = useState(false);
+
+  // the "?" button calls the note back — straight to the naming advice
+  useEffect(() => {
+    if (props.nudge > 0) setStep('name');
+  }, [props.nudge]);
 
   useEffect(() => {
     if (step === 'sail' && props.sailed) setStep('name');
@@ -34,16 +45,21 @@ export function FirstNote(props: { sailed: boolean; named: boolean }) {
     }
   }, [props.named, step]);
 
-  if (step === 'done' || dismissed) return null;
+  if (step === 'done' || props.dismissed) return null;
   return (
     <div className="first-note" role="note">
       <span className="fn-mark">※</span>
       {step === 'sail' ? (
-        <span>uncharted waters — drag to sail, scroll or pinch to sound the depths</span>
+        <span>
+          <b>drag</b> to sail · <b>scroll or pinch</b> to zoom · arrow keys steer
+        </span>
       ) : (
-        <span>tap a red pennant — the first sailor to name a place inks it forever</span>
+        <span>
+          <b>tap a red pennant</b> — the first sailor to name a place inks it onto this chart, forever, for
+          everyone
+        </span>
       )}
-      <button onClick={() => setDismissed(true)} aria-label="Dismiss">
+      <button onClick={() => props.onDismiss(true)} aria-label="Dismiss">
         ×
       </button>
     </div>

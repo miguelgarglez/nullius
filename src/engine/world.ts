@@ -36,14 +36,20 @@ export class WorldView {
   private pointers = new Map<number, { x: number; y: number }>();
   private lastPinch = 0;
   private dragMoved = 0;
+  private trail: { t: number; x: number; y: number }[] = [];
   private features: Feature[] = [];
   private hovered: Feature | null = null;
+  private pressed: Feature | null = null;
   private claims = new Map<string, ClaimLike>();
   private claimBirth = new Map<string, number>();
   private ships: ShipLike[] = [];
+  private shipsDrawn = new Map<string, { x: number; y: number }>();
+  private glide: { x0: number; y0: number; s0: number; x1: number; y1: number; s1: number; t0: number; dur: number } | null = null;
   private onFeatures: (fs: Feature[]) => void;
-  private onTap: ((wx: number, wy: number) => void) | null = null;
+  private onTap: ((f: Feature | null) => void) | null = null;
+  private onFrame: (() => void) | null = null;
   private reduced = false;
+  private canHover = true;
   private ro: ResizeObserver | null = null;
   private listeners: (() => void)[] = [];
 
@@ -56,6 +62,11 @@ export class WorldView {
     const onMq = (e: MediaQueryListEvent) => (this.reduced = e.matches);
     this.mq.addEventListener('change', onMq);
     this.listeners.push(() => this.mq?.removeEventListener('change', onMq));
+    const hq = matchMedia('(hover: hover)');
+    this.canHover = hq.matches;
+    const onHq = (e: MediaQueryListEvent) => (this.canHover = e.matches);
+    hq.addEventListener('change', onHq);
+    this.listeners.push(() => hq.removeEventListener('change', onHq));
     this.bind();
     this.resize();
     this.raf = requestAnimationFrame(this.frame);
@@ -101,8 +112,50 @@ export class WorldView {
   setShips(ships: ShipLike[]) {
     this.ships = ships;
   }
-  setOnTap(fn: (wx: number, wy: number) => void) {
+  /** tap resolves to a feature (or null) — same eligibility as hover */
+  setOnTap(fn: (f: Feature | null) => void) {
     this.onTap = fn;
+  }
+  /** called after each rendered frame — lets React overlays ride the camera */
+  setOnFrame(fn: () => void) {
+    this.onFrame = fn;
+  }
+
+  /** the pennants that are actually drawn and hittable right now */
+  private eligible(f: Feature): boolean {
+    return !!this.claims.get(f.id) || f.prominence >= 0.45 || this.cam.scale >= 0.7;
+  }
+
+  hitTest(wx: number, wy: number): Feature | null {
+    let best: Feature | null = null;
+    let bd = Infinity;
+    for (const f of this.features) {
+      if (!this.eligible(f)) continue;
+      const d = Math.hypot(f.x - wx, f.y - wy);
+      if (d < bd) {
+        bd = d;
+        best = f;
+      }
+    }
+    return best && bd < 28 / this.cam.scale ? best : null;
+  }
+
+  /** render the coarse terrain under the viewport synchronously so the
+   *  first visible frame already has complete coverage */
+  prewarm() {
+    const w = this.canvas.clientWidth;
+    const h = this.canvas.clientHeight;
+    const lod = Math.max(MIN_LOD, Math.min(MAX_LOD, Math.round(Math.log2(UPP0 * this.cam.scale))));
+    const coarse = Math.max(MIN_LOD, lod - 3);
+    const cw = tileWorld(coarse);
+    const vx0 = this.cam.x - w / 2 / this.cam.scale;
+    const vy0 = this.cam.y - h / 2 / this.cam.scale;
+    for (let ty = Math.floor(vy0 / cw); ty <= Math.floor((this.cam.y + h / 2 / this.cam.scale) / cw); ty++) {
+      for (let tx = Math.floor(vx0 / cw); tx <= Math.floor((this.cam.x + w / 2 / this.cam.scale) / cw); tx++) {
+        const key = `${coarse}:${tx}:${ty}`;
+        if (!this.tiles.has(key)) this.tiles.set(key, renderTile(coarse, tx, ty));
+      }
+    }
   }
 
   get camera(): Camera {
@@ -123,10 +176,27 @@ export class WorldView {
     };
   }
 
-  flyTo(wx: number, wy: number, scale?: number) {
-    this.cam.x = wx;
-    this.cam.y = wy;
-    if (scale !== undefined) this.cam.scale = clampScale(scale);
+  /** glide to a spot — a deliberate voyage, not a teleport */
+  flyTo(wx: number, wy: number, scale?: number, instant = false) {
+    const s1 = scale !== undefined ? clampScale(scale) : this.cam.scale;
+    if (instant || this.reduced) {
+      this.cam.x = wx;
+      this.cam.y = wy;
+      this.cam.scale = s1;
+      this.glide = null;
+      return;
+    }
+    this.glide = {
+      x0: this.cam.x,
+      y0: this.cam.y,
+      s0: this.cam.scale,
+      x1: wx,
+      y1: wy,
+      s1,
+      t0: performance.now(),
+      dur: 750,
+    };
+    this.vel.x = this.vel.y = 0;
   }
 
   private resize() {
@@ -148,6 +218,14 @@ export class WorldView {
       this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       this.vel.x = this.vel.y = 0;
       this.dragMoved = 0;
+      this.trail = [{ t: e.timeStamp, x: e.clientX, y: e.clientY }];
+      this.glide = null; // the hand interrupts any voyage
+      if (!this.canHover) {
+        // touch has no hover: press-light the pennant under the finger
+        const rect = el.getBoundingClientRect();
+        const w = this.toWorld(e.clientX - rect.left, e.clientY - rect.top);
+        this.pressed = this.hitTest(w.x, w.y);
+      }
       if (this.pointers.size === 2) {
         const [a, b] = [...this.pointers.values()];
         this.lastPinch = Math.hypot(a.x - b.x, a.y - b.y);
@@ -157,20 +235,11 @@ export class WorldView {
     this.listen(el, 'pointermove', (e) => {
       const p = this.pointers.get(e.pointerId);
       if (!p) {
+        if (!this.canHover) return;
         // hovering: signal which pennant is within reach
         const rect = el.getBoundingClientRect();
         const w = this.toWorld(e.clientX - rect.left, e.clientY - rect.top);
-        let best: Feature | null = null;
-        let bd = Infinity;
-        for (const f of this.features) {
-          const d = Math.hypot(f.x - w.x, f.y - w.y);
-          if (d < bd) {
-            bd = d;
-            best = f;
-          }
-        }
-        const reach = 30 / this.cam.scale;
-        const hov = best && bd < reach ? best : null;
+        const hov = this.hitTest(w.x, w.y);
         if (hov !== this.hovered) {
           this.hovered = hov;
           el.style.cursor = hov ? 'pointer' : '';
@@ -182,6 +251,9 @@ export class WorldView {
       p.x = e.clientX;
       p.y = e.clientY;
       this.dragMoved += Math.abs(dx) + Math.abs(dy);
+      this.trail.push({ t: e.timeStamp, x: e.clientX, y: e.clientY });
+      if (this.trail.length > 8) this.trail.shift();
+      if (this.pressed && this.dragMoved > 8) this.pressed = null;
 
       if (this.pointers.size === 2) {
         const [a, b] = [...this.pointers.values()];
@@ -197,18 +269,38 @@ export class WorldView {
         // drag the sea: world follows the finger
         this.cam.x -= dx / this.cam.scale;
         this.cam.y -= dy / this.cam.scale;
-        this.vel.x = -dx / this.cam.scale;
-        this.vel.y = -dy / this.cam.scale;
       }
     });
 
     const up = (e: PointerEvent) => {
       const had = this.pointers.delete(e.pointerId);
       this.lastPinch = 0;
-      if (had && this.pointers.size === 0 && this.dragMoved < 6 && this.onTap) {
-        const rect = el.getBoundingClientRect();
-        const w = this.toWorld(e.clientX - rect.left, e.clientY - rect.top);
-        this.onTap(w.x, w.y);
+      this.pressed = null;
+      if (had && this.pointers.size === 0) {
+        if (this.dragMoved < 6 && this.onTap) {
+          const rect = el.getBoundingClientRect();
+          const w = this.toWorld(e.clientX - rect.left, e.clientY - rect.top);
+          this.onTap(this.hitTest(w.x, w.y));
+        } else {
+          // release velocity from timestamped samples: displacement over
+          // the last ~90ms of the gesture, in world units per 16.67ms
+          this.vel.x = this.vel.y = 0;
+          if (!this.reduced && this.trail.length > 1) {
+            const last = this.trail[this.trail.length - 1];
+            let first = last;
+            for (const s of this.trail) {
+              if (last.t - s.t <= 90) first = s;
+              else break;
+            }
+            const span = last.t - first.t;
+            // a pause before release means the hand stopped — no fling
+            if (span > 20 && e.timeStamp - last.t < 60) {
+              const k = 16.67 / span;
+              this.vel.x = (-(last.x - first.x) / this.cam.scale) * k;
+              this.vel.y = (-(last.y - first.y) / this.cam.scale) * k;
+            }
+          }
+        }
       }
     };
     this.listen(el, 'pointerup', up);
@@ -219,6 +311,7 @@ export class WorldView {
       'wheel',
       (e) => {
         e.preventDefault();
+        this.glide = null;
         const rect = el.getBoundingClientRect();
         const mx = e.clientX - rect.left;
         const my = e.clientY - rect.top;
@@ -235,9 +328,9 @@ export class WorldView {
     );
 
     this.listen(window, 'keydown', (e) => {
-      // don't hijack typing in inputs or dialogs
+      // don't hijack typing in inputs, dialogs, or other controls
       const t = e.target as HTMLElement | null;
-      if (t && (t.closest('input, textarea, [contenteditable], .intro-scrim'))) return;
+      if (t && t.closest('input, textarea, select, [contenteditable], [role="dialog"], .first-note, .logbook')) return;
       const step = 60 / this.cam.scale;
       if (e.key === 'ArrowLeft') this.cam.x -= step;
       if (e.key === 'ArrowRight') this.cam.x += step;
@@ -260,19 +353,29 @@ export class WorldView {
     this.raf = requestAnimationFrame(this.frame);
     const { cam, vel } = this;
 
-    // inertia when released — dt-normalized so refresh rate doesn't
-    // change how the sea carries you
     const now = performance.now();
     const dt = Math.min(50, now - (this.lastT || now));
     this.lastT = now;
-    if (this.pointers.size === 0) {
+
+    // a deliberate voyage (logbook, deep link) eases toward its bearing
+    if (this.glide) {
+      const g = this.glide;
+      const t = Math.min(1, (now - g.t0) / g.dur);
+      const e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+      cam.x = g.x0 + (g.x1 - g.x0) * e;
+      cam.y = g.y0 + (g.y1 - g.y0) * e;
+      cam.scale = g.s0 + (g.s1 - g.s0) * e;
+      if (t >= 1) this.glide = null;
+    } else if (this.pointers.size === 0) {
+      // inertia when released — dt-normalized so refresh rate doesn't
+      // change how the sea carries you; still under reduced motion
       const dtn = dt / 16.67;
       cam.x += vel.x * dtn;
       cam.y += vel.y * dtn;
-      const damp = Math.pow(this.reduced ? 0.82 : 0.94, dtn);
+      const damp = Math.pow(0.94, dtn);
       vel.x *= damp;
       vel.y *= damp;
-      if (Math.abs(vel.x) + Math.abs(vel.y) < 0.001) {
+      if (this.reduced || Math.abs(vel.x) + Math.abs(vel.y) < 0.001) {
         vel.x = vel.y = 0;
       }
     }
@@ -303,7 +406,7 @@ export class WorldView {
 
     let budget = TILE_BUDGET_PER_FRAME;
     // background for not-yet-drawn area
-    ctx.fillStyle = '#ece3cd';
+    ctx.fillStyle = '#d9dccc';
     ctx.fillRect(vx0, vy0, vx1 - vx0, vy1 - vy0);
 
     for (let ty = ty0; ty <= ty1; ty++) {
@@ -368,6 +471,8 @@ export class WorldView {
 
     // publish features to React (cheap check to avoid churn)
     this.onFeatures(this.features);
+    // overlays that ride the camera re-anchor every frame, not on a poll
+    this.onFrame?.();
   };
 
   /** Draw the nearest cached ancestor tile covering (lod,tx,ty). */
@@ -395,7 +500,7 @@ export class WorldView {
   }
 
   private drawHaze(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, tx: number, ty: number) {
-    ctx.fillStyle = '#ece3cd';
+    ctx.fillStyle = '#d9dccc';
     ctx.fillRect(x, y, s, s);
     ctx.fillStyle = 'rgba(93,109,117,0.10)';
     for (let i = 0; i < 14; i++) {
@@ -434,10 +539,11 @@ export class WorldView {
         ctx.lineTo(0, bm * 1.5);
         ctx.stroke();
 
-        // the name inks letter by letter — a surveyor's hand, not a fade
+        // the name inks letter by letter — a surveyor's hand, not a fade.
+        // settled names carry cartographic weight, not caption size
         const birth = this.claimBirth.get(f.id);
         const age = birth ? performance.now() - birth : Infinity;
-        const fs = Math.max(px(11), px(9) + f.prominence * px(6));
+        const fs = px(14) + f.prominence * px(11);
         ctx.font = `italic ${fs}px "EB Garamond", Georgia, serif`;
         ctx.fillStyle = '#22303B';
         const chars = Math.ceil(Math.min(1, age / (this.reduced ? 1 : 1100)) * claim.name.length);
@@ -461,8 +567,10 @@ export class WorldView {
           }
         }
       } else {
-        // uncharted pennant — stirs when within reach
+        // uncharted pennant — stirs when within reach; presses harder
+        // under a finger (touch has no hover)
         const hot = f === this.hovered;
+        const press = f === this.pressed;
         const s = px(1);
         ctx.strokeStyle = '#B33A2B';
         ctx.lineWidth = px(1.4);
@@ -470,18 +578,18 @@ export class WorldView {
         ctx.moveTo(0, 0);
         ctx.lineTo(0, -14 * s);
         ctx.stroke();
-        ctx.fillStyle = '#B33A2B';
+        ctx.fillStyle = press ? '#8E2B1F' : '#B33A2B';
         ctx.beginPath();
-        const lift = hot ? px(2.5) : 0;
+        const lift = hot || press ? px(2.5) : 0;
         ctx.moveTo(0, -14 * s - lift);
         ctx.lineTo(9 * s, -11 * s - lift);
         ctx.lineTo(0, -8 * s - lift);
         ctx.closePath();
         ctx.fill();
-        if (hot) {
+        if (hot || press) {
           // a sounding-ring: the place acknowledges you
-          ctx.strokeStyle = 'rgba(179,58,43,0.5)';
-          ctx.lineWidth = px(1);
+          ctx.strokeStyle = press ? 'rgba(179,58,43,0.75)' : 'rgba(179,58,43,0.5)';
+          ctx.lineWidth = px(press ? 1.4 : 1);
           ctx.beginPath();
           ctx.arc(0, 0, px(7), 0, Math.PI * 2);
           ctx.stroke();
@@ -535,12 +643,26 @@ export class WorldView {
     ctx.stroke();
   }
 
-  /** other sailors abroad — small engraved ships under sail */
+  /** other sailors abroad — small engraved ships under sail; positions
+   *  ease toward the latest presence fix instead of jumping */
   private drawShips(ctx: CanvasRenderingContext2D) {
     const px = (w: number) => w / this.cam.scale;
+    const seen = new Set<string>();
     for (const s of this.ships) {
+      seen.add(s.sailor);
+      let d = this.shipsDrawn.get(s.sailor);
+      if (!d) {
+        d = { x: s.x, y: s.y };
+        this.shipsDrawn.set(s.sailor, d);
+      } else if (!this.reduced) {
+        d.x += (s.x - d.x) * 0.12;
+        d.y += (s.y - d.y) * 0.12;
+      } else {
+        d.x = s.x;
+        d.y = s.y;
+      }
       ctx.save();
-      ctx.translate(s.x, s.y);
+      ctx.translate(d.x, d.y);
       const sc = px(1);
       ctx.strokeStyle = 'rgba(34,48,59,0.85)';
       ctx.fillStyle = 'rgba(34,48,59,0.85)';
@@ -570,12 +692,15 @@ export class WorldView {
       }
       ctx.restore();
     }
+    for (const k of this.shipsDrawn.keys()) {
+      if (!seen.has(k)) this.shipsDrawn.delete(k);
+    }
   }
 
   private drawVignette(ctx: CanvasRenderingContext2D, w: number, h: number) {
     const g = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.42, w / 2, h / 2, Math.max(w, h) * 0.75);
-    g.addColorStop(0, 'rgba(236,227,205,0)');
-    g.addColorStop(1, 'rgba(236,227,205,0.55)');
+    g.addColorStop(0, 'rgba(218,222,202,0)');
+    g.addColorStop(1, 'rgba(218,222,202,0.55)');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, w, h);
   }

@@ -15,6 +15,7 @@ import { FirstNote } from './ui/FirstNote';
 import { Logbook } from './ui/Logbook';
 
 const SAILOR_KEY = 'nullius.sailor';
+const HAPTICS_KEY = 'nullius.haptics';
 
 /** localStorage can throw (private mode, denied storage) — never fatal */
 function safeStore(key: string, value: string) {
@@ -31,6 +32,13 @@ function safeRead(key: string): string {
     return '';
   }
 }
+function buzz(pattern: number | number[]) {
+  try {
+    if (safeRead(HAPTICS_KEY) !== 'off') navigator.vibrate?.(pattern);
+  } catch {
+    /* no haptics */
+  }
+}
 
 interface Anchored {
   f: Feature;
@@ -41,7 +49,6 @@ interface Anchored {
 export default function App() {
   const ref = useRef<HTMLCanvasElement>(null);
   const viewRef = useRef<WorldView | null>(null);
-  const featuresRef = useRef<Feature[]>([]);
   const claimsRef = useRef<Map<string, Claim>>(new Map());
   const [claims, setClaims] = useState<Map<string, Claim>>(claimsRef.current);
   const [selected, setSelected] = useState<Anchored | null>(null);
@@ -60,9 +67,18 @@ export default function App() {
   const [features, setFeatures] = useState<Feature[]>([]);
   const [sailed, setSailed] = useState(false);
   const [named, setNamed] = useState(false);
+  const [noteNudge, setNoteNudge] = useState(0);
+  const [noteDismissed, setNoteDismissed] = useState(false);
   const featSigRef = useRef('');
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const receiptTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ceremonyTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const spawnRef = useRef<{ x: number; y: number } | null>(null);
+
+  const clearCeremony = () => {
+    for (const t of ceremonyTimers.current) clearTimeout(t);
+    ceremonyTimers.current = [];
+    setSinking(null);
+  };
 
   const pushClaim = useCallback((c: Claim) => {
     const next = new Map(claimsRef.current);
@@ -75,7 +91,6 @@ export default function App() {
   useEffect(() => {
     if (!ref.current) return;
     const v = new WorldView(ref.current, (fs) => {
-      featuresRef.current = fs;
       const sig = fs.map((f) => f.id).join('|');
       if (sig !== featSigRef.current) {
         featSigRef.current = sig;
@@ -86,34 +101,49 @@ export default function App() {
 
     // deep link: #x,y,scale — otherwise weigh anchor at the harbor
     const h = location.hash.slice(1).split(',').map(Number);
-    if (h.length === 3 && h.every(Number.isFinite)) v.flyTo(h[0], h[1], h[2]);
+    if (h.length === 3 && h.every(Number.isFinite)) v.flyTo(h[0], h[1], h[2], true);
     else {
       const harbor = findHarbor();
-      v.flyTo(harbor.x, harbor.y, window.innerWidth < 600 ? 1.0 : 1.4);
+      v.flyTo(harbor.x, harbor.y, window.innerWidth < 600 ? 1.0 : 1.4, true);
     }
+    // coarse terrain under the first frame — no bare rectangles
+    v.prewarm();
+    spawnRef.current = { x: v.camera.x, y: v.camera.y };
 
-    // tap → nearest feature within reach → open the naming card
-    v.setOnTap((wx, wy) => {
-      let best: Feature | null = null;
-      let bd = Infinity;
-      for (const f of featuresRef.current) {
-        const d = Math.hypot(f.x - wx, f.y - wy);
-        if (d < bd) {
-          bd = d;
-          best = f;
-        }
-      }
-      const reach = 26 / v.camera.scale;
-      if (best && bd < reach) {
-        const s = v.toScreen(best.x, best.y);
+    // tap resolves through the same hit-test the cursor uses
+    v.setOnTap((f) => {
+      clearCeremony();
+      if (f) {
+        const s = v.toScreen(f.x, f.y);
         setTaken(null);
         setCardError(null);
         setReceipt(null);
-        setSelected({ f: best, sx: s.x, sy: s.y });
+        setSelected({ f, sx: s.x, sy: s.y });
       } else {
         setSelected(null);
         setReceipt(null);
       }
+    });
+
+    // cards ride the camera on every rendered frame, not a poll
+    v.setOnFrame(() => {
+      const c = v.camera;
+      if (spawnRef.current && Math.hypot(c.x - spawnRef.current.x, c.y - spawnRef.current.y) > 60 / c.scale) {
+        spawnRef.current = null;
+        setSailed(true);
+      }
+      setSelected((cur) => {
+        if (!cur) return cur;
+        const s = v.toScreen(cur.f.x, cur.f.y);
+        if (Math.abs(s.x - cur.sx) < 0.01 && Math.abs(s.y - cur.sy) < 0.01) return cur;
+        return { ...cur, sx: s.x, sy: s.y };
+      });
+      setReceipt((cur) => {
+        if (!cur) return cur;
+        const s = v.toScreen(cur.f.x, cur.f.y);
+        if (Math.abs(s.x - cur.sx) < 0.01 && Math.abs(s.y - cur.sy) < 0.01) return cur;
+        return { ...cur, sx: s.x, sy: s.y };
+      });
     });
 
     // ledger: subscribe first so live inserts can never be clobbered by
@@ -157,8 +187,10 @@ export default function App() {
 
     const onEsc = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        clearCeremony();
         setSelected(null);
         setReceipt(null);
+        ref.current?.focus();
       }
     };
     window.addEventListener('keydown', onEsc);
@@ -170,38 +202,14 @@ export default function App() {
       if (location.hash !== next) history.replaceState(null, '', next);
     }, 800);
 
-    // cards ride their pennants while the chart drifts
-    const followTimer = setInterval(() => {
-      setSelected((cur) => {
-        if (!cur) return cur;
-        const s = v.toScreen(cur.f.x, cur.f.y);
-        if (Math.abs(s.x - cur.sx) < 0.5 && Math.abs(s.y - cur.sy) < 0.5) return cur;
-        return { ...cur, sx: s.x, sy: s.y };
-      });
-      setReceipt((cur) => {
-        if (!cur) return cur;
-        const s = v.toScreen(cur.f.x, cur.f.y);
-        return { ...cur, sx: s.x, sy: s.y };
-      });
-    }, 150);
-
-    // the first drag proves the sea can be sailed
-    const onDrag = (e: PointerEvent) => {
-      if (e.buttons) setSailed(true);
-    };
-    ref.current.addEventListener('pointermove', onDrag);
-    const el = ref.current;
-
     return () => {
       unsub();
       unPresence();
-      el.removeEventListener('pointermove', onDrag);
       window.removeEventListener('keydown', onEsc);
       window.removeEventListener('hashchange', onHash);
       clearInterval(linkTimer);
-      clearInterval(followTimer);
+      clearCeremony();
       if (toastTimer.current) clearTimeout(toastTimer.current);
-      if (receiptTimer.current) clearTimeout(receiptTimer.current);
       v.destroy();
       viewRef.current = null;
     };
@@ -219,7 +227,8 @@ export default function App() {
       setSailor(who);
       pushClaim(res.claim);
       setNamed(true);
-      // the slip sinks into the chart where the name now lives
+      buzz(12);
+      // stage 1 — the slip sinks into the chart where the name now lives
       const s = viewRef.current?.toScreen(target.f.x, target.f.y);
       if (s) {
         const cardCx = Math.min(Math.max(target.sx - 110, 8), window.innerWidth - 240) + 110;
@@ -228,14 +237,21 @@ export default function App() {
       }
       const claim = res.claim;
       const feat = target.f;
-      setTimeout(() => {
-        setSinking(null);
-        setSelected(null);
-        const sc = viewRef.current?.toScreen(feat.x, feat.y);
-        setReceipt({ f: feat, claim, sx: sc?.x ?? 0, sy: sc?.y ?? 0 });
-        if (receiptTimer.current) clearTimeout(receiptTimer.current);
-        receiptTimer.current = setTimeout(() => setReceipt(null), 14000);
-      }, 380);
+      // stage 2 — the slip is gone; the name inks letter by letter (~1.1s)
+      ceremonyTimers.current.push(
+        setTimeout(() => {
+          setSinking(null);
+          setSelected(null);
+        }, 380),
+      );
+      // stage 3 — only once the ink settles does the ledger entry appear,
+      // placed below the mark so it never covers its own reveal
+      ceremonyTimers.current.push(
+        setTimeout(() => {
+          const sc = viewRef.current?.toScreen(feat.x, feat.y);
+          setReceipt({ f: feat, claim, sx: sc?.x ?? 0, sy: sc?.y ?? 0 });
+        }, 1400),
+      );
     } else if (res.reason === 'taken') {
       const c = await fetchClaim(target.f.id);
       if (c) pushClaim(c);
@@ -245,22 +261,35 @@ export default function App() {
         return cur;
       });
     } else {
+      buzz([20, 40, 20]);
       setCardError(res.reason === 'offline' ? 'no signal — the ledger is unreachable' : 'the ink would not take — try again');
     }
   };
 
   const selClaim = selected ? claims.get(selected.f.id) : undefined;
   const cardPos = (a: { sx: number; sy: number }) => ({
+    left: Math.min(Math.max(a.sx - 110, 8), window.innerWidth - 248),
+    top: Math.min(Math.max(a.sy - 128, 8), window.innerHeight - 210),
+  });
+  // the ledger entry sits below the survey mark, clear of the new name
+  const receiptPos = (a: { sx: number; sy: number }) => ({
     left: Math.min(Math.max(a.sx - 110, 8), window.innerWidth - 240),
-    top: Math.min(Math.max(a.sy - 120, 8), window.innerHeight - 200),
+    top: Math.min(a.sy + 42, window.innerHeight - 170),
   });
 
   return (
     <div className="app">
-      <canvas ref={ref} className="chart" aria-label="A navigable chart of unclaimed lands. Use the logbook to list places in view." />
+      <canvas
+        ref={ref}
+        className="chart"
+        tabIndex={0}
+        aria-label="A navigable chart of unclaimed lands. Use the logbook to list places in view."
+      />
       <header className="chart-title">
         <h1>NULLIUS</h1>
-        <p className="sub">a chart of unclaimed lands</p>
+        <p className="sub">
+          CHART OF UNCLAIMED LANDS <span className="plate">— plate nº ∞</span>
+        </p>
         <p className="ledger-line">
           {online
             ? `${abroad} ${abroad === 1 ? 'sailor' : 'sailors'} abroad · ${claims.size} ${claims.size === 1 ? 'name' : 'names'} given`
@@ -270,18 +299,22 @@ export default function App() {
       {selected && (
         <ClaimCard
           feature={selected.f}
-          claim={selClaim}
+          claim={sinking ? undefined : selClaim}
           sailor={sailor}
           busy={busy}
           error={cardError}
           taken={taken}
           sinking={sinking}
           onName={onName}
-          onClose={() => setSelected(null)}
+          onClose={() => {
+            clearCeremony();
+            setSelected(null);
+            ref.current?.focus();
+          }}
           style={cardPos(selected)}
         />
       )}
-      {receipt && <Receipt claim={receipt.claim} onClose={() => setReceipt(null)} style={cardPos(receipt)} />}
+      {receipt && <Receipt claim={receipt.claim} onClose={() => setReceipt(null)} style={receiptPos(receipt)} />}
       <Logbook
         open={logOpen}
         features={features}
@@ -300,7 +333,17 @@ export default function App() {
           {toast}
         </div>
       )}
-      <FirstNote sailed={sailed} named={named || !!selected} />
+      <FirstNote sailed={sailed} named={named || !!selected} dismissed={noteDismissed} onDismiss={setNoteDismissed} nudge={noteNudge} />
+      <button
+        className="chart-note-help"
+        onClick={() => {
+          setNoteDismissed(false);
+          setNoteNudge((n) => n + 1);
+        }}
+        aria-label="Show sailing notes"
+      >
+        ?
+      </button>
     </div>
   );
 }

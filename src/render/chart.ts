@@ -16,7 +16,7 @@ export function tileWorld(lod: number): number {
   return TILE_PX * unitsPerPx(lod);
 }
 
-const PAPER = '#efe7d0';
+const PAPER = '#dde1cf';
 const LAND = '#f2ebd8';
 const LAND_SHADE = '#e7dcbd';
 const INK = '#26333d';
