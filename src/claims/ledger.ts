@@ -29,9 +29,9 @@ function client(): SupabaseClient | null {
   return sb;
 }
 
-/** the claims table: product-prefixed in the public schema (PostgREST only
-    exposes public on hosted Supabase; RLS still guards every access) */
-const table = () => client()!.from('nullius_claims');
+/** the claims table lives in this product's own schema of the shared Lab
+    project; RLS still guards every access */
+const table = () => client()!.schema('nullius').from('claims');
 
 export const ledgerOnline = () => client() !== null;
 
@@ -95,7 +95,7 @@ export function subscribeClaims(onClaim: (c: Claim) => void): () => void {
     .channel('nullius-claims')
     .on(
       'postgres_changes',
-      { event: 'INSERT', schema: 'public', table: 'nullius_claims' },
+      { event: 'INSERT', schema: 'nullius', table: 'claims' },
       (payload) => onClaim(payload.new as Claim),
     )
     .subscribe();

@@ -28,7 +28,7 @@ https://github.com/miguelgarglez/nullius/assets/launch.mp4 ·
   rhumb lines and a compass rose. Tiles render at multiple LODs and crossfade
   as finer detail arrives — the paper never flashes placeholders.
 - **First writer wins.** Names live in a shared Supabase ledger
-  (`nullius_claims`, `feature_key` primary key, read-all/insert-only RLS).
+  (`nullius.claims`, `feature_key` primary key, read-all/insert-only RLS).
   A race is settled atomically by the database: the loser's card keeps a
   durable "your name arrived too late" verdict beside the winner.
 - **Names are inscriptions, not tooltips.** A claimed place keeps a survey
@@ -53,7 +53,7 @@ ledger. To run against your own Supabase project, apply
 ```sh
 cp .env.example .env.local   # or create it:
 # VITE_SUPABASE_URL=https://<project>.supabase.co
-# VITE_SUPABASE_ANON_KEY=<publishable key>
+# VITE_SUPABASE_PUBLISHABLE_KEY=<publishable key>
 ```
 
 ## controls
@@ -76,7 +76,16 @@ form never loses what you typed.
 ## stack
 
 Vite + React + TypeScript, one canvas, zero map libraries. Supabase Postgres
-for the claims ledger, realtime for presence and new inscriptions. Deployed
-on Vercel.
+for the claims ledger (schema `nullius` of a shared project), realtime for
+presence and new inscriptions. A Cloudflare cron worker (`keepalive/`) reads
+one row every 3 days so the free project never pauses under a live chart.
+Deployed on Vercel.
+
+## a note on the film
+
+`docs/launch.mp4` was shot when the ledger ran elsewhere and shows a naming
+("Cabo de la Primera Luz") that does not exist on this chart. The ledger was
+moved and started empty — every name you see now was left by a real sailor.
+The film stays because it still shows the ceremony faithfully.
 
 MIT — sail on.
