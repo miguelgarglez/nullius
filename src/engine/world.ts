@@ -29,6 +29,7 @@ export class WorldView {
   private vel = { x: 0, y: 0 };
   private guide: Feature | null = null;
   private tiles = new Map<string, HTMLCanvasElement>();
+  private tileBorn = new Map<string, number>();
   private queue: { lod: number; tx: number; ty: number }[] = [];
   private inQueue = new Set<string>();
   private raf = 0;
@@ -444,7 +445,17 @@ export class WorldView {
         const key = `${lod}:${tx}:${ty}`;
         const t = this.tiles.get(key);
         if (t) {
-          ctx.drawImage(t, tx * tw, ty * tw, tw, tw);
+          // fresh tiles ink in over their coarser parent — refinement
+          // crossfades instead of popping a sharper rectangle
+          const age = performance.now() - (this.tileBorn.get(key) ?? -1e9);
+          if (!this.reduced && age < 240) {
+            if (!this.drawParentTile(ctx, lod, tx, ty, tw)) this.drawHaze(ctx, tx * tw, ty * tw, tw, tx, ty);
+            ctx.globalAlpha = Math.max(0.2, age / 240);
+            ctx.drawImage(t, tx * tw, ty * tw, tw, tw);
+            ctx.globalAlpha = 1;
+          } else {
+            ctx.drawImage(t, tx * tw, ty * tw, tw, tw);
+          }
           this.tiles.delete(key);
           this.tiles.set(key, t); // touch for LRU
         } else {
@@ -457,6 +468,7 @@ export class WorldView {
             budget--;
             const made = renderTile(lod, tx, ty);
             this.tiles.set(key, made);
+            this.tileBorn.set(key, performance.now());
             ctx.drawImage(made, tx * tw, ty * tw, tw, tw);
           } else if (!this.inQueue.has(key)) {
             this.inQueue.add(key);
@@ -474,6 +486,7 @@ export class WorldView {
       this.inQueue.delete(key);
       if (!this.tiles.has(key)) {
         this.tiles.set(key, renderTile(job.lod, job.tx, job.ty));
+        this.tileBorn.set(key, performance.now());
       }
     }
 
@@ -482,6 +495,7 @@ export class WorldView {
       let drop = this.tiles.size - TILE_CACHE_CAP;
       for (const k of this.tiles.keys()) {
         this.tiles.delete(k);
+        this.tileBorn.delete(k);
         if (--drop <= 0) break;
       }
     }
@@ -568,30 +582,33 @@ export class WorldView {
     }
   }
 
+  /** screen rects inscriptions must not sit under — the corner furniture.
+   *  [x0, y0, x1, y1] in CSS px */
+  private labelZones(cw: number, ch: number): [number, number, number, number][] {
+    if (cw < 560) {
+      return [
+        [0, 0, cw, 68], // title + "?" top margin
+        [0, ch - 62, cw, ch], // bottom row: note/logbook region
+      ];
+    }
+    return [
+      [0, 0, 256, 140], // chart title
+      [0, ch - 66, 74, ch], // "?" help
+      [cw - 200, ch - 62, cw, ch], // logbook toggle
+    ];
+  }
+
   private drawLabels(ctx: CanvasRenderingContext2D) {
     const px = (w: number) => w / this.cam.scale; // world units for px size
-    for (const f of this.features) {
+    // inscriptions are placed strongest-first; a label that would sit on
+    // another name yields its spot — the mark stays, the text waits for
+    // a closer zoom
+    const drawn: [number, number, number, number][] = [];
+    const ordered = [...this.features].sort((a, b) => b.prominence - a.prominence);
+    for (const f of ordered) {
       const claim = this.claims.get(f.id);
       // uncharted pennants thin out when zoomed far out
       if (!claim && f.prominence < 0.45 && this.cam.scale < 0.7) continue;
-      let lx = f.x;
-      let ly = f.y;
-      if (claim) {
-        // keep the whole name on the chart: near an edge the label slides
-        // to stay legible while its survey mark stays on the exact point
-        const fs0 = px(14) + f.prominence * px(11);
-        ctx.font = `italic ${fs0}px "EB Garamond", Georgia, serif`;
-        const half = (ctx.measureText(claim.name).width / 2) * this.cam.scale;
-        const cw = this.canvas.clientWidth;
-        const ch = this.canvas.clientHeight;
-        const sx = (f.x - this.cam.x) * this.cam.scale + cw / 2;
-        const sy = (f.y - this.cam.y) * this.cam.scale + ch / 2;
-        lx += (Math.min(Math.max(sx, 12 + half), cw - 12 - half) - sx) / this.cam.scale;
-        // the name rides above the mark — drop it below when there's no
-        // headroom, clear of the mark itself
-        const top = sy - (fs0 + 14) * this.cam.scale;
-        if (top < 10) ly = f.y + (px(14) + px(26));
-      }
       ctx.save();
       ctx.translate(f.x, f.y);
       if (claim) {
@@ -612,32 +629,112 @@ export class WorldView {
         ctx.stroke();
         ctx.restore();
         ctx.save();
-        // the inscription sits at the clamped spot, not the mark
-        ctx.translate(lx, ly);
+
+        // -- the inscription ------------------------------------------
+        // layout: wrap to two lines or shrink until the name fits the
+        // chart's safe width; the mark stays put, the label slides
+        const birth = this.claimBirth.get(f.id);
+        const age = birth ? performance.now() - birth : Infinity;
+        const frac = Math.min(1, age / (this.reduced ? 1 : 1100));
+        const chars = Math.ceil(frac * claim.name.length);
+        const cwS = this.canvas.clientWidth;
+        const chS = this.canvas.clientHeight;
+        const availWu = (cwS - 28) / this.cam.scale;
+        let fs = px(14) + f.prominence * px(11);
+        const setFont = () => {
+          ctx.font = `italic ${fs}px "EB Garamond", Georgia, serif`;
+        };
+        setFont();
+        let lines = [claim.name];
+        if (ctx.measureText(claim.name).width > availWu) {
+          // split at the space nearest the middle — a name in two
+          // cartographic lines beats a name off the chart
+          const mid = claim.name.length / 2;
+          let cut = -1;
+          for (let i = 0; i < claim.name.length; i++) {
+            if (claim.name[i] === ' ' && (cut < 0 || Math.abs(i - mid) < Math.abs(cut - mid))) cut = i;
+          }
+          if (cut > 0) {
+            lines = [claim.name.slice(0, cut), claim.name.slice(cut + 1)];
+          }
+        }
+        let ws = lines.map((l) => ctx.measureText(l).width);
+        const widest = Math.max(...ws);
+        if (widest > availWu) {
+          fs *= Math.max(0.55, availWu / widest);
+          setFont();
+          ws = lines.map((l) => ctx.measureText(l).width);
+        }
+        const half = (Math.max(...ws) / 2) * this.cam.scale; // screen px
+        const linePx = fs * 1.18 * this.cam.scale; // screen px per line
+        const blockPx = lines.length * linePx;
+
+        // screen-space spot: clamped inside the viewport and clear of
+        // the corner furniture (title, help, logbook)
+        const sx0 = (f.x - this.cam.x) * this.cam.scale + cwS / 2;
+        const sy0 = (f.y - this.cam.y) * this.cam.scale + chS / 2;
+        const lsx = Math.min(Math.max(sx0, 14 + half), cwS - 14 - half);
+        let ltop = sy0 - px(14) * this.cam.scale - blockPx; // default: above
+        if (ltop < 10) ltop = sy0 + px(26) * this.cam.scale; // …or below
+        for (const z of this.labelZones(cwS, chS)) {
+          if (lsx + half > z[0] && lsx - half < z[2] && ltop + blockPx > z[1] && ltop < z[3]) {
+            const down = z[3] + 6 - ltop;
+            const up = ltop + blockPx - z[1] + 6;
+            ltop += down <= up ? down : -up;
+          }
+        }
+        // yield to an already-placed inscription rather than overprint it
+        const rect: [number, number, number, number] = [
+          lsx - half - 4,
+          ltop - 2,
+          lsx + half + 4,
+          ltop + blockPx + 2,
+        ];
+        let collides = false;
+        for (const d of drawn) {
+          if (rect[0] < d[2] && rect[2] > d[0] && rect[1] < d[3] && rect[3] > d[1]) {
+            collides = true;
+            break;
+          }
+        }
+        if (collides) {
+          ctx.restore();
+          continue;
+        }
+        drawn.push(rect);
+        const lx = f.x + (lsx - sx0) / this.cam.scale;
+        const ltopW = f.y + (ltop - sy0) / this.cam.scale;
+        ctx.translate(lx, ltopW);
+
+        // a quiet clearing behind the name — the coast never fights it
+        const halfW = Math.max(...ws) / 2;
+        ctx.fillStyle = 'rgba(217,222,202,0.55)';
+        ctx.fillRect(-halfW - px(6), -px(3), halfW * 2 + px(12), blockPx / this.cam.scale + px(6));
 
         // the name inks letter by letter — a surveyor's hand, not a fade.
         // settled names carry cartographic weight, not caption size
-        const birth = this.claimBirth.get(f.id);
-        const age = birth ? performance.now() - birth : Infinity;
-        ctx.font = `italic ${px(14) + f.prominence * px(11)}px "EB Garamond", Georgia, serif`;
         ctx.fillStyle = '#22303B';
-        const chars = Math.ceil(Math.min(1, age / (this.reduced ? 1 : 1100)) * claim.name.length);
-        const shown = claim.name.slice(0, chars);
-        const fullW = ctx.measureText(claim.name).width;
         ctx.textAlign = 'left';
-        const settle = chars < claim.name.length ? px(2) : 0;
-        ctx.fillText(shown, -fullW / 2, px(-12) + settle);
-        if (chars === claim.name.length) {
+        let used = 0;
+        for (let i = 0; i < lines.length; i++) {
+          const room = Math.max(0, Math.min(lines[i].length, chars - used));
+          const shown = lines[i].slice(0, room);
+          used += lines[i].length + 1;
+          ctx.fillText(shown, -ws[i] / 2, fs * 0.82 + i * fs * 1.18);
+        }
+        if (chars >= claim.name.length) {
+          const lastW = ws[ws.length - 1];
+          const underY = fs * 0.82 + (lines.length - 1) * fs * 1.18 + px(5);
           ctx.strokeStyle = 'rgba(34,48,59,0.5)';
           ctx.lineWidth = px(0.8);
           ctx.beginPath();
-          ctx.moveTo(-fullW / 2, px(-6));
-          ctx.lineTo(fullW / 2, px(-6));
+          ctx.moveTo(-lastW / 2, underY);
+          ctx.lineTo(lastW / 2, underY);
           ctx.stroke();
           if (age < 120000) {
             ctx.fillStyle = 'rgba(179,58,43,0.85)';
             ctx.beginPath();
-            ctx.arc(fullW / 2 + px(8), px(-14), px(2.6), 0, Math.PI * 2);
+            ctx.arc(lastW / 2 + px(8), underY - px(8), px(2.6), 0, Math.PI * 2);
             ctx.fill();
           }
         }

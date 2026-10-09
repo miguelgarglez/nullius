@@ -55,12 +55,13 @@ export function ClaimCard(props: {
   busy: boolean;
   error: string | null;
   taken: Claim | null;
+  checking: boolean;
   sinking: { dx: number; dy: number } | null;
   onName: (name: string, sailor: string) => void;
   onClose: () => void;
   anchor: { sx: number; sy: number };
 }) {
-  const { feature, claim, sailor, busy, taken } = props;
+  const { feature, claim, sailor, busy, taken, checking } = props;
   const [name, setName] = useState('');
   const [who, setWho] = useState(sailor);
   // whether this card opened with an empty log — the sailor line stays
@@ -105,11 +106,10 @@ export function ClaimCard(props: {
       {claim ? (
         <div className="claim-plaque">
           <div className="claim-name">{claim.name}</div>
-          <div className="claim-byline">
-            charted by <em>{claim.sailor}</em> — ref {Math.round(feature.x)} · {Math.round(feature.y)}
-          </div>
-          <button className="plaque-share" onClick={copyLink}>
-            {copied === 'ok' ? 'bearing copied' : 'copy bearing'}
+          <div className="claim-byline">charted by {claim.sailor}</div>
+          {/* the reference IS the share control — copy the bearing */}
+          <button className="ref-share" onClick={copyLink} title="copy a link to this spot">
+            ref {Math.round(feature.x)} · {Math.round(feature.y)} <span className="ref-mark">{copied === 'ok' ? '✓' : '⧉'}</span>
           </button>
           {copied === 'fail' && (
             <input
@@ -131,7 +131,9 @@ export function ClaimCard(props: {
             }
           }}
         >
-          <div className="claim-kicker">uncharted {noun}</div>
+          <div className="claim-kicker">
+            {checking ? `uncharted ${noun} · checking the ledger…` : `uncharted ${noun}`}
+          </div>
           {taken ? (
             <div className="claim-taken">
               another sailor beat you to it — it is <em>{taken.name}</em> now
@@ -157,7 +159,10 @@ export function ClaimCard(props: {
                   disabled={busy}
                 />
               )}
-              <button type="submit" disabled={busy || name.trim().length < 2 || who.trim().length < 1}>
+              <button
+                type="submit"
+                disabled={busy || checking || name.trim().length < 2 || who.trim().length < 1}
+              >
                 {busy ? 'inking…' : 'claim it — forever'}
               </button>
             </>
@@ -198,12 +203,17 @@ export function Receipt(props: {
     <div ref={ref} className="ledger-entry" role="status" aria-live="polite">
       <div className="le-kicker">ENTERED IN THE CHART</div>
       <div className="le-line">
-        <em>{claim.name}</em>, charted by {claim.sailor} — ref {Math.round(claim.x)} ·{' '}
-        {Math.round(claim.y)}
+        <em>{claim.name}</em>, charted by {claim.sailor}
       </div>
       <div className="le-actions">
-        <button onClick={copyLink}>{copied === 'ok' ? 'bearing copied' : 'copy bearing'}</button>
-        <button onClick={props.onClose}>sail on</button>
+        {/* the reference IS the share control — copy the bearing */}
+        <button className="ref-share" onClick={copyLink} title="copy a link to this spot">
+          ref {Math.round(claim.x)} · {Math.round(claim.y)}{' '}
+          <span className="ref-mark">{copied === 'ok' ? '✓' : '⧉'}</span>
+        </button>
+        <button className="sail-on" onClick={props.onClose}>
+          sail on →
+        </button>
       </div>
       {copied === 'fail' && (
         <input

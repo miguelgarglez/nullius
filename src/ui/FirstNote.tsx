@@ -1,5 +1,21 @@
 import { useEffect, useState } from 'react';
 
+const HAPTICS_KEY = 'nullius.haptics';
+const readHaptics = () => {
+  try {
+    return localStorage.getItem(HAPTICS_KEY) ?? 'on';
+  } catch {
+    return 'on';
+  }
+};
+const writeHaptics = (v: string) => {
+  try {
+    localStorage.setItem(HAPTICS_KEY, v);
+  } catch {
+    /* memory only */
+  }
+};
+
 const SEEN_KEY = 'nullius.seen-intro';
 
 // First-run guidance as marginalia, not a modal. The note stages its
@@ -15,6 +31,7 @@ export function FirstNote(props: {
   onDismiss: (d: boolean) => void;
   nudge: number;
 }) {
+  const [hapticsOff, setHapticsOff] = useState(() => readHaptics() === 'off');
   const [step, setStep] = useState<Step>(() => {
     try {
       return localStorage.getItem(SEEN_KEY) ? 'done' : 'sail';
@@ -51,8 +68,8 @@ export function FirstNote(props: {
       <span className="fn-mark">※</span>
       {step === 'sail' && (
         <span>
-          <b>drag</b> to sail · <b>scroll or pinch</b> to zoom · a <b>red pennant</b> is a place waiting to
-          be named
+          a <b>red pennant</b> is a place you can name — forever, for everyone · <b>drag</b> to sail ·{' '}
+          <b>scroll or pinch</b> to zoom
         </span>
       )}
       {step === 'name' && (
@@ -64,7 +81,17 @@ export function FirstNote(props: {
       {step === 'help' && (
         <span>
           <b>drag</b> to sail · <b>scroll or pinch</b> to zoom · <b>tap a red pennant</b> to name a place
-          forever — the <b>logbook</b> lists everything in view
+          forever — the <b>logbook</b> lists everything in view ·{' '}
+          <button
+            className="fn-haptics"
+            onClick={() => {
+              const off = readHaptics() === 'off';
+              writeHaptics(off ? 'on' : 'off');
+              setHapticsOff(!off);
+            }}
+          >
+            touch buzz: {hapticsOff ? 'off' : 'on'}
+          </button>
         </span>
       )}
       <button onClick={() => props.onDismiss(true)} aria-label="Dismiss">

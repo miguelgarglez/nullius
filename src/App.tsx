@@ -63,6 +63,7 @@ export default function App() {
   const [taken, setTaken] = useState<Claim | null>(null);
   const [cardError, setCardError] = useState<string | null>(null);
   const [online, setOnline] = useState(ledgerOnline);
+  const [ledgerReady, setLedgerReady] = useState(false);
   const [pos, setPos] = useState<{ x: number; y: number; s: number } | null>(null);
   const [logOpen, setLogOpen] = useState(false);
   const [features, setFeatures] = useState<Feature[]>([]);
@@ -74,6 +75,7 @@ export default function App() {
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ceremonyTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const spawnRef = useRef<{ x: number; y: number } | null>(null);
+  const lastInput = useRef<'key' | 'ptr'>('ptr');
 
   const clearCeremony = () => {
     for (const t of ceremonyTimers.current) clearTimeout(t);
@@ -169,6 +171,7 @@ export default function App() {
       }
     });
     loadClaims().then((m) => {
+      setLedgerReady(true);
       if (m === null) {
         setOnline(false);
         return;
@@ -179,6 +182,14 @@ export default function App() {
       setClaims(merged);
       v.setClaims(merged);
     });
+
+    // modality: keyboard-driven logbook voyages arrive instantly,
+    // pointer ones glide
+    const onModality = (e: Event) => {
+      lastInput.current = e.type === 'keydown' ? 'key' : 'ptr';
+    };
+    window.addEventListener('keydown', onModality, true);
+    window.addEventListener('pointerdown', onModality, true);
     const unPresence = trackPresence(
       (ships) => {
         v.setShips(ships.map((s) => ({ x: s.x, y: s.y, sailor: s.sailor })));
@@ -225,6 +236,8 @@ export default function App() {
     return () => {
       unsub();
       unPresence();
+      window.removeEventListener('keydown', onModality, true);
+      window.removeEventListener('pointerdown', onModality, true);
       window.removeEventListener('keydown', onEsc);
       window.removeEventListener('hashchange', onHash);
       clearInterval(linkTimer);
@@ -245,13 +258,14 @@ export default function App() {
     if (res.ok) {
       safeStore(SAILOR_KEY, who);
       setSailor(who);
-      pushClaim(res.claim);
       setNamed(true);
       buzz(12);
-      // stage 1 — the slip sinks into the chart where the name now lives
       // under reduced motion the ceremony arrives already settled —
-      // no sink delay, no letter-by-letter wait, entry at once
+      // no sink, no letter-by-letter wait, no plaque flash
       const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (reduced) setSelected(null);
+      // stage 1 — the slip sinks into the chart where the name now lives
+      pushClaim(res.claim);
       const s = viewRef.current?.toScreen(target.f.x, target.f.y);
       const cardEl = document.querySelector<HTMLElement>('.claim-card');
       if (s && cardEl && !reduced) {
@@ -292,20 +306,46 @@ export default function App() {
     }
   };
 
-  // the first-run cue: the nearest unclaimed pennant in view wears a
-  // breathing survey ring until the visitor acts — names a place,
-  // opens a card, or dismisses the note
+  // the first-run cue: once the ledger is known, the unclaimed pennant
+  // nearest the viewport's unobscured center wears a breathing survey
+  // ring — until the visitor acts (names, opens a card, dismisses)
   useEffect(() => {
     const v = viewRef.current;
-    if (!v) return;
-    if (named || noteDismissed || selected) {
+    const el = ref.current;
+    if (!v || !el) return;
+    if (named || noteDismissed || selected || !ledgerReady) {
       v.setGuideTarget(null);
       return;
     }
-    v.setGuideTarget(features.find((f) => !claims.has(f.id)) ?? null);
-  }, [features, claims, named, noteDismissed, selected]);
+    const cw = el.clientWidth;
+    const ch = el.clientHeight;
+    const topBar = cw < 560 ? 80 : 150;
+    const bottomBar = cw < 560 ? 92 : 74;
+    let best: Feature | null = null;
+    let bestD = Infinity;
+    for (const f of features) {
+      if (claims.has(f.id)) continue;
+      const s = v.toScreen(f.x, f.y);
+      if (s.x < 44 || s.x > cw - 44 || s.y < topBar || s.y > ch - bottomBar) continue;
+      const d = Math.hypot(s.x - cw / 2, s.y - ch / 2);
+      if (d < bestD) {
+        bestD = d;
+        best = f;
+      }
+    }
+    v.setGuideTarget(best);
+  }, [features, claims, named, noteDismissed, selected, ledgerReady]);
 
   const selClaim = selected ? claims.get(selected.f.id) : undefined;
+  // the logbook lists what the chart actually shows right now — no
+  // entries for features lurking beyond the edge
+  const logbookFeatures = features.filter((f) => {
+    const v = viewRef.current;
+    const el = ref.current;
+    if (!v || !el) return true;
+    const s = v.toScreen(f.x, f.y);
+    return s.x > 16 && s.x < el.clientWidth - 16 && s.y > 16 && s.y < el.clientHeight - 16;
+  });
 
   return (
     <div className="app">
@@ -325,7 +365,9 @@ export default function App() {
               <br />
             </>
           )}
-          {online ? (
+          {!ledgerReady && online ? (
+            'reading the ledger…'
+          ) : online ? (
             <>
               {abroad} {abroad === 1 ? 'sailor' : 'sailors'} abroad ·{' '}
               <span className="count" key={claims.size}>
@@ -346,6 +388,7 @@ export default function App() {
           busy={busy}
           error={cardError}
           taken={taken}
+          checking={!ledgerReady && online}
           sinking={sinking}
           onName={onName}
           onClose={() => {
@@ -359,11 +402,11 @@ export default function App() {
       {receipt && <Receipt claim={receipt.claim} onClose={() => setReceipt(null)} anchor={receipt} />}
       <Logbook
         open={logOpen}
-        features={features}
+        features={logbookFeatures}
         claims={claims}
         onToggle={() => setLogOpen((o) => !o)}
         onSail={(f) => {
-          viewRef.current?.flyTo(f.x, f.y);
+          viewRef.current?.flyTo(f.x, f.y, undefined, lastInput.current === 'key');
           const s = viewRef.current?.toScreen(f.x, f.y);
           setTaken(null);
           setSelected({ f, sx: s?.x ?? 0, sy: s?.y ?? 0 });

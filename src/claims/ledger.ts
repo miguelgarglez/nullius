@@ -63,12 +63,19 @@ export async function claimFeature(
     y: f.y,
     sailor: sailor.trim(),
   };
-  const { data, error } = await table().insert(row).select().single();
-  if (error) {
-    if (error.code === '23505') return { ok: false, reason: 'taken' };
-    return { ok: false, reason: 'error' };
+  try {
+    const { data, error } = await table().insert(row).select().single();
+    if (error) {
+      if (error.code === '23505') return { ok: false, reason: 'taken' };
+      if (/fetch|network|Failed to fetch/i.test(error.message ?? ''))
+        return { ok: false, reason: 'offline' };
+      return { ok: false, reason: 'error' };
+    }
+    return { ok: true, claim: data as Claim };
+  } catch {
+    // fetch itself failed — no route to the ledger
+    return { ok: false, reason: 'offline' };
   }
-  return { ok: true, claim: data as Claim };
 }
 
 /** One feature's row — used after a lost race to learn the winning name. */

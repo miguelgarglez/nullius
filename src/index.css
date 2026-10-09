@@ -120,6 +120,19 @@ body,
   font-variant: small-caps;
   letter-spacing: 0.06em;
 }
+.fn-haptics {
+  background: none;
+  border: none;
+  font-family: inherit;
+  font-size: inherit;
+  color: var(--ink-soft);
+  border-bottom: 1px dashed var(--rule);
+  cursor: pointer;
+  padding: 0;
+}
+.fn-haptics:hover {
+  color: var(--ink);
+}
 .first-note button {
   background: none;
   border: none;
@@ -206,11 +219,13 @@ body,
     transform: translateX(-50%) translateY(0);
   }
 }
+/* survey notation — the working voice of the chart — sets itself apart
+   from the engraved serif labels in a functional monospace register */
 .claim-kicker {
-  font-family: 'EB Garamond', serif;
-  font-variant: small-caps;
-  font-size: 11.5px;
-  letter-spacing: 0.22em;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
   color: var(--ink-soft);
   margin-bottom: 8px;
 }
@@ -232,6 +247,8 @@ body,
   border-bottom-color: var(--vermilion);
 }
 .claim-card button[type='submit'] {
+  display: block;
+  width: 100%;
   font-family: 'EB Garamond', serif;
   font-variant: small-caps;
   font-size: 13px;
@@ -276,22 +293,8 @@ body,
   font-size: 13px;
   color: var(--ink-soft);
 }
-.plaque-share {
+.claim-plaque .ref-share {
   margin-top: 6px;
-  font-family: 'EB Garamond', serif;
-  font-variant: small-caps;
-  font-size: 11.5px;
-  letter-spacing: 0.14em;
-  color: var(--ink);
-  background: none;
-  border: none;
-  border-bottom: 1px solid var(--rule);
-  padding: 2px 0;
-  cursor: pointer;
-}
-.plaque-share:hover {
-  color: var(--vermilion);
-  border-bottom-color: var(--vermilion);
 }
 .claim-taken {
   font-size: 14px;
@@ -361,10 +364,10 @@ body,
   }
 }
 .le-kicker {
-  font-family: 'EB Garamond', serif;
-  font-variant: small-caps;
-  font-size: 11px;
-  letter-spacing: 0.24em;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
   color: var(--ink-soft);
   margin-bottom: 4px;
 }
@@ -380,25 +383,41 @@ body,
 }
 .le-actions {
   display: flex;
-  gap: 14px;
+  align-items: baseline;
+  gap: 16px;
   margin-top: 8px;
 }
 .le-actions button {
-  font-family: 'EB Garamond', serif;
-  font-size: 11.5px;
-  font-variant: small-caps;
-  letter-spacing: 0.14em;
-  color: var(--ink);
   background: transparent;
   border: none;
-  border-bottom: 1px solid var(--rule);
   padding: 2px 0;
   min-width: 44px;
   cursor: pointer;
+  text-align: left;
 }
-.le-actions button:hover {
+/* the reference doubles as the share control — a bearing you can copy */
+.ref-share {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  color: var(--ink);
+  border-bottom: 1px dashed var(--rule) !important;
+}
+.ref-share .ref-mark {
   color: var(--vermilion);
-  border-bottom-color: var(--vermilion);
+}
+.ref-share:hover {
+  color: var(--vermilion);
+  border-bottom-color: var(--vermilion) !important;
+}
+.sail-on {
+  font-family: 'EB Garamond', serif;
+  font-style: italic;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+.sail-on:hover {
+  color: var(--ink);
 }
 .le-link {
   width: 100%;
@@ -478,10 +497,10 @@ body,
   animation: slip-in 0.25s var(--ease-out);
 }
 .logbook-head {
-  font-family: 'EB Garamond', serif;
-  font-variant: small-caps;
-  font-size: 11px;
-  letter-spacing: 0.2em;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
   color: var(--ink-soft);
   padding: 10px 14px 6px;
   border-bottom: 1px solid var(--rule-soft);
@@ -517,9 +536,9 @@ body,
   color: var(--ink-soft);
 }
 .logbook .lb-kind {
-  font-family: 'EB Garamond', serif;
-  font-variant: small-caps;
-  font-size: 11.5px;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 10px;
+  letter-spacing: 0.06em;
   color: var(--ink-soft);
   align-self: center;
   white-space: nowrap;
@@ -534,7 +553,7 @@ body,
 /* pressed states: controls acknowledge the hand */
 .logbook-toggle:active,
 .le-actions button:active,
-.plaque-share:active,
+.claim-plaque .ref-share:active,
 .claim-card button[type='submit']:active,
 .first-note button:active,
 .chart-note-help:active,
@@ -562,19 +581,29 @@ input:focus-visible {
     font-size: 13px;
   }
   .chart-title .sub {
-    font-size: 9px;
+    font-size: 10px;
   }
   .chart-title .ledger-line {
-    font-size: 11px;
+    font-size: 12px;
   }
   .first-note {
     left: 12px;
-    right: auto;
-    bottom: 14px;
+    right: 12px;
+    bottom: 66px; /* above the logbook row — separate seats */
     transform: none;
-    max-width: calc(100vw - 128px);
-    font-size: 12.5px;
+    max-width: none;
+    font-size: 13px;
     animation: slip-in 0.35s var(--ease-out);
+  }
+  .fn-haptics {
+    background: none;
+    border: none;
+    font-family: inherit;
+    font-size: inherit;
+    color: var(--ink-soft);
+    border-bottom: 1px dashed var(--rule);
+    cursor: pointer;
+    padding: 0;
   }
   /* the "?" moves to the top margin — the bottom belongs to the note */
   .chart-note-help {
@@ -624,7 +653,8 @@ input:focus-visible {
   }
   .claim-card button[type='submit'],
   .le-actions button,
-  .plaque-share {
+  .claim-plaque .ref-share,
+  .fn-haptics {
     min-height: 44px;
     min-width: 44px;
   }
