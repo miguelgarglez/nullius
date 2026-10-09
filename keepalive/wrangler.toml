@@ -2,12 +2,12 @@ name = "nullius-keepalive"
 main = "src/index.js"
 compatibility_date = "2026-10-01"
 
-# One cheap ledger read every 3 days so the free Supabase project
-# never idles into a pause. SUPABASE_URL is a var; the publishable
-# key is a `wrangler secret` (it ships in the client bundle anyway,
-# but this keeps the repo grep-clean of keys).
+# One cheap ledger read once a day — best-effort keep-warm so the free
+# Supabase project does not idle into a pause. SUPABASE_URL is a var; the
+# publishable key is a `wrangler secret` (it ships in the client bundle
+# anyway, but this keeps the repo grep-clean of keys).
 [vars]
 SUPABASE_URL = "https://vdcmjjhluxyjprcspsyc.supabase.co"
 
 [triggers]
-crons = ["17 4 */3 * *"]
+crons = ["17 4 * * *"]

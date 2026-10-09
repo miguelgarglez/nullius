@@ -47,8 +47,16 @@ npm run dev      # http://localhost:5173
 ```
 
 Without env vars it sails offline — the chart works, claiming waits for a
-ledger. To run against your own Supabase project, apply
-`supabase/migrations/`, then:
+ledger. To run against your own Supabase project:
+
+1. Apply `supabase/migrations/` in order. The second migration creates the
+   live table in its own `nullius` schema (`public.nullius_claims` is the
+   retired first ledger; a fresh install can safely skip migration one).
+2. Expose the schema to the API: Dashboard → Settings → API →
+   *Exposed schemas*, add `nullius` (keep `public` and `graphql_public`).
+   Or with a Management API token:
+   `PATCH /v1/projects/<ref>/postgrest` with `{"db_schema":"public,graphql_public,nullius"}`.
+3. Then set the env vars:
 
 ```sh
 cp .env.example .env.local   # or create it:
@@ -78,8 +86,9 @@ form never loses what you typed.
 Vite + React + TypeScript, one canvas, zero map libraries. Supabase Postgres
 for the claims ledger (schema `nullius` of a shared project), realtime for
 presence and new inscriptions. A Cloudflare cron worker (`keepalive/`) reads
-one row every 3 days so the free project never pauses under a live chart.
-Deployed on Vercel.
+one row once a day so the free project does not idle into a pause — deploy it
+with `npx wrangler deploy` from `keepalive/` after `npx wrangler secret put
+SUPABASE_KEY`. Deployed on Vercel.
 
 ## a note on the film
 

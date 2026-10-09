@@ -39,9 +39,12 @@ function grain(): HTMLCanvasElement {
   const img = ctx.createImageData(256, 256);
   for (let j = 0; j < 256; j++) {
     for (let i = 0; i < 256; i++) {
+      // laid vellum: isotropic tooth, long horizontal fibres, faint
+      // vertical chain lines — directional like real sheet, not uniform grit
       const n =
-        hash2f(i, j, 777) * 0.6 +
-        hash2f(i >> 2, j >> 2, 778) * 0.3 +
+        hash2f(i, j, 777) * 0.55 +
+        hash2f(i >> 5, j, 778) * 0.28 +
+        hash2f(i, j >> 5, 780) * 0.07 +
         hash2f(i >> 4, j >> 4, 779) * 0.1;
       const v = 190 + Math.floor(n * 60); // 190..250, paper fibre
       const o = (j * 256 + i) * 4;

@@ -38,6 +38,7 @@ const errors = [];
 const mk = async () => {
   const p = await browser.newPage({ viewport: { width: W, height: H } });
   p.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  p.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
   await p.goto(`${BASE}/#${CAM.x},${CAM.y},${CAM.scale}`, { waitUntil: 'networkidle' });
   await p.waitForTimeout(1500);
   const btn = p.locator('.intro-card button');
@@ -49,7 +50,9 @@ const b = await mk();
 
 // the first-run guide glides the camera once toward a pennant — wait for
 // the ref line to settle before trusting any screen coordinate
-const line = async (p) => (await p.locator('.ledger-line').textContent()) ?? '';
+// innerText (not textContent) keeps the <br/> break between the camera
+// ref and the counters, so "×1.60" and "2 sailors" never merge into "1.602"
+const line = async (p) => (await p.locator('.ledger-line').innerText()) ?? '';
 const camOf = (t) => {
   const m = /ref (-?\d+) · (-?\d+) · ×([\d.]+)/.exec(t);
   return m ? { x: Number(m[1]), y: Number(m[2]), s: Number(m[3]) } : null;
@@ -94,10 +97,20 @@ await a.waitForTimeout(4000);
 const la = await line(a), lb = await line(b);
 console.log('A ledger-line:', la.replace(/\s+/g, ' ').trim());
 console.log('B ledger-line:', lb.replace(/\s+/g, ' ').trim());
-if (!/2 sailors abroad/.test(la) || !/2 sailors abroad/.test(lb)) {
-  console.log('FAIL: presence did not report 2 sailors on both clients');
+const abroadOf = (t) => {
+  const m = /(\d+) sailors? abroad/.exec(t);
+  return m ? Number(m[1]) : null;
+};
+if (abroadOf(la) !== 2 || abroadOf(lb) !== 2) {
+  console.log('FAIL: presence did not report exactly 2 sailors on both clients');
   process.exit(1);
 }
+const namesOf = (t) => {
+  const m = /(\d+) names? given/.exec(t);
+  return m ? Number(m[1]) : null;
+};
+const namesB0 = namesOf(lb);
+if (namesB0 === null) { console.log('FAIL: could not read B name counter'); process.exit(1); }
 
 // A claims it
 await a.mouse.click(target.sx, target.sy);
@@ -106,21 +119,23 @@ if (!(await a.locator('.claim-card').count())) {
   await a.screenshot({ path: '/tmp/nullius-ledgercheck-nocard.png' });
   console.log('FAIL: click did not open the claim card'); process.exit(1);
 }
-await a.fill('.claim-card input[aria-label^="Name"]', 'Faro del Relevo');
+const NAME = `Faro del Relevo ${Date.now() % 1000}`;
+await a.fill('.claim-card input[aria-label^="Name"]', NAME);
 await a.fill('.claim-card input[aria-label="Your sailor name"]', 'keeper');
 await a.click('.claim-card button[type="submit"]');
 await a.waitForTimeout(2500);
 await a.screenshot({ path: '/tmp/nullius-ledgercheck-a.png' });
 
-// B must see the claim arrive over realtime: toast or the counter bumping
+// B must see THIS claim arrive over realtime: the toast names it, and
+// the counter must step exactly +1 from B's pre-claim count
 let saw = false;
 for (let i = 0; i < 10; i++) {
-  const t = await b.locator('.toast').count();
+  const toast = (await b.locator('.toast').textContent().catch(() => '')) ?? '';
   const l = await line(b);
-  if (t > 0 || /1 name/.test(l)) { saw = true; break; }
+  if (toast.includes(NAME) && namesOf(l) === namesB0 + 1) { saw = true; break; }
   await b.waitForTimeout(700);
 }
-console.log('B saw the claim live:', saw);
+console.log(`B saw "${NAME}" live, counter ${namesB0} -> ${namesB0 + 1}:`, saw);
 await b.screenshot({ path: '/tmp/nullius-ledgercheck-b.png' });
 
 // B opens the same feature: the card must show it already claimed.
@@ -132,7 +147,13 @@ const camB = camOf(await line(b)) ?? CAM;
 await b.mouse.click((target.wx - camB.x) * camB.s + W / 2, (target.wy - camB.y) * camB.s + H / 2);
 await b.waitForTimeout(600);
 const cardText = (await b.locator('.claim-card').textContent().catch(() => '')) ?? '';
+const plaque = await b.locator('.claim-card .claim-plaque').count();
+const hasForm = await b.locator('.claim-card input').count();
 console.log('B card excerpt:', cardText.replace(/\s+/g, ' ').slice(0, 140));
+if (!(cardText.includes(NAME) && cardText.includes('keeper') && plaque > 0 && hasForm === 0)) {
+  console.log('FAIL: B card does not show the claim as settled (name/plaque/no-form)');
+  process.exit(1);
+}
 
 console.log('console errors:', errors.length);
 for (const e of errors.slice(0, 5)) console.log('  ', e.slice(0, 160));

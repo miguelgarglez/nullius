@@ -75,9 +75,9 @@ body,
 }
 .chart-title .sub {
   font-family: 'EB Garamond', serif;
-  font-variant: small-caps;
-  letter-spacing: 0.2em;
-  font-size: 10.5px;
+  font-style: italic;
+  font-size: 11.5px;
+  letter-spacing: 0.03em;
   color: var(--ink-soft);
   margin: 2px 0 0;
 }
@@ -220,12 +220,11 @@ body,
   }
 }
 /* survey notation — the working voice of the chart — sets itself apart
-   from the engraved serif labels in a functional monospace register */
+   from the italic water names in an engraved small-caps register */
 .claim-kicker {
-  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-  font-size: 10px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  font-family: 'IM Fell English SC', 'EB Garamond', serif;
+  font-size: 11px;
+  letter-spacing: 0.05em;
   color: var(--ink-soft);
   margin-bottom: 8px;
 }
@@ -252,7 +251,7 @@ body,
   font-family: 'EB Garamond', serif;
   font-variant: small-caps;
   font-size: 13px;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.08em;
   color: var(--vellum);
   background: var(--ink);
   border: none;
@@ -364,10 +363,9 @@ body,
   }
 }
 .le-kicker {
-  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-  font-size: 10px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
+  font-family: 'IM Fell English SC', 'EB Garamond', serif;
+  font-size: 11px;
+  letter-spacing: 0.05em;
   color: var(--ink-soft);
   margin-bottom: 4px;
 }
@@ -395,11 +393,14 @@ body,
   cursor: pointer;
   text-align: left;
 }
-/* the reference doubles as the share control — a bearing you can copy */
+/* the reference doubles as the share control — a bearing you can copy.
+   tabular serif figures keep the digits aligned without leaving the
+   engraved register */
 .ref-share {
-  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-  font-size: 10.5px;
-  letter-spacing: 0.08em;
+  font-family: 'EB Garamond', serif;
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  letter-spacing: 0.04em;
   color: var(--ink);
   border-bottom: 1px dashed var(--rule) !important;
 }
@@ -468,7 +469,7 @@ body,
   font-family: 'EB Garamond', serif;
   font-variant: small-caps;
   font-size: 13px;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.08em;
   color: var(--ink-soft);
   background: transparent;
   border: none;
@@ -497,10 +498,9 @@ body,
   animation: slip-in 0.25s var(--ease-out);
 }
 .logbook-head {
-  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-  font-size: 10px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
+  font-family: 'IM Fell English SC', 'EB Garamond', serif;
+  font-size: 11px;
+  letter-spacing: 0.05em;
   color: var(--ink-soft);
   padding: 10px 14px 6px;
   border-bottom: 1px solid var(--rule-soft);
@@ -536,9 +536,9 @@ body,
   color: var(--ink-soft);
 }
 .logbook .lb-kind {
-  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-  font-size: 10px;
-  letter-spacing: 0.06em;
+  font-family: 'IM Fell English SC', 'EB Garamond', serif;
+  font-size: 11px;
+  letter-spacing: 0.05em;
   color: var(--ink-soft);
   align-self: center;
   white-space: nowrap;

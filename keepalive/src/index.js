@@ -1,6 +1,6 @@
-// nullius keep-alive: one cheap read of the claims ledger every 3 days.
-// A PostgREST request counts as activity, so the shared free-tier project
-// never pauses underneath a live portfolio piece.
+// nullius keep-alive: one cheap read of the claims ledger once a day.
+// PostgREST requests count as activity — best-effort so the shared
+// free-tier project does not idle into a pause under a live chart.
 export default {
   async scheduled(_event, env, ctx) {
     ctx.waitUntil(
