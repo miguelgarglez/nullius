@@ -85,9 +85,9 @@ body,
   font-family: 'EB Garamond', serif;
   font-size: 12px;
   color: var(--ink-soft);
-  margin-top: 6px;
-  padding-top: 5px;
-  border-top: 1px solid var(--rule-soft);
+  /* telemetry sits under the wordmark on air alone — no internal rule
+     competing with the cartouche's own frame */
+  margin-top: 7px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -188,10 +188,11 @@ body,
   background: linear-gradient(to top, rgba(34, 48, 59, 0.6), rgba(34, 48, 59, 0.05));
 }
 .claim-card::after {
-  /* leader to the survey point below */
+  /* leader to the survey point below — follows the real anchor even
+     when the card is clamped to an edge */
   content: '';
   position: absolute;
-  left: 50%;
+  left: var(--leader-x, 50%);
   bottom: -26px;
   width: 1px;
   height: 24px;
@@ -236,11 +237,11 @@ body,
 .claim-card.leaving,
 .ledger-entry.leaving,
 .logbook.leaving {
-  animation: slip-out 0.2s ease-in forwards;
+  animation: slip-out 0.2s var(--ease-out) forwards;
 }
 .first-note.leaving,
 .toast.leaving {
-  animation: slip-out-c 0.2s ease-in forwards;
+  animation: slip-out-c 0.2s var(--ease-out) forwards;
 }
 /* while a naming tray is open on a small screen, a survey ring marks
    the pennant it belongs to — the tray replaces the leader, the ring
@@ -462,6 +463,10 @@ body,
 }
 .ref-share .ref-mark {
   color: var(--vermilion);
+  /* the seat fits "copied" so the confirmation never shifts the bearing */
+  display: inline-block;
+  min-width: 3em;
+  text-align: left;
 }
 .ref-share:hover {
   color: var(--vermilion);
@@ -604,9 +609,11 @@ body,
 }
 .logbook .lb-kind {
   font-family: 'IM Fell English SC', 'EB Garamond', serif;
-  font-size: 11px;
+  font-size: 12.5px;
   letter-spacing: 0.05em;
-  color: var(--ink-soft);
+  /* the action is an instruction, not an annotation — darker than the
+     quiet bearings beside it */
+  color: var(--ink);
   align-self: center;
   white-space: nowrap;
 }
@@ -615,7 +622,7 @@ body,
   flex-direction: column;
 }
 .logbook .lb-ref {
-  font-size: 11px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.04em;
   color: var(--ink-soft);
@@ -659,7 +666,7 @@ input:focus-visible {
     font-size: 16px;
   }
   .chart-title .sub {
-    font-size: 10px;
+    font-size: 12px;
   }
   .chart-title .ledger-line {
     font-size: 12px;
@@ -672,6 +679,11 @@ input:focus-visible {
     max-width: none;
     font-size: 13px;
     animation: slip-in 0.35s var(--ease-out);
+  }
+  /* the mobile note is left-aligned — its exit slides down, never
+     toward a horizontal center it never had */
+  .first-note.leaving {
+    animation-name: slip-out;
   }
   .fn-haptics {
     background: none;
@@ -785,10 +797,15 @@ input:focus-visible {
    overrides above — this block must come last */
 @media (prefers-reduced-motion: reduce) {
   .claim-card,
+  .claim-card.leaving,
   .toast,
+  .toast.leaving,
   .logbook,
+  .logbook.leaving,
   .first-note,
+  .first-note.leaving,
   .ledger-entry,
+  .ledger-entry.leaving,
   .sel-anchor,
   .ledger-line .count {
     animation: none;

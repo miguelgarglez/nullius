@@ -34,6 +34,10 @@ export function Logbook(props: {
       return;
     }
     if (!rendered) return;
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setRendered(false); // no exit to play — leave at once
+      return;
+    }
     setLeaving(true);
     const t = setTimeout(() => {
       setRendered(false);

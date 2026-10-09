@@ -78,14 +78,23 @@ export function FirstNote(props: {
   }, [props.named, step]);
 
   // retiring — the note slips back out instead of vanishing
+  const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
   useEffect(() => {
     if (step !== 'done' || gone) return;
+    if (reduced()) {
+      setGone(true);
+      return;
+    }
     setLeaving(true);
     const t = setTimeout(() => setGone(true), 240);
     return () => clearTimeout(t);
   }, [step, gone]);
 
   const dismiss = () => {
+    if (reduced()) {
+      props.onDismiss(true);
+      return;
+    }
     setLeaving(true);
     setTimeout(() => props.onDismiss(true), 200);
   };

@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Feature } from '../world/features';
 import type { Claim } from '../claims/ledger';
+import { buzz } from '../haptics';
 
 // The naming annotation: an inked note anchored above its pennant by a
 // leader line. It measures itself and picks the side with room. On
@@ -42,6 +43,9 @@ function useAnchored(
     if (y < m) y = m;
     el.style.left = `${x}px`;
     el.style.top = `${y}px`;
+    // clamped near an edge, the leader still points at the true survey
+    // point — it slides along the card's edge to keep the line honest
+    el.style.setProperty('--leader-x', `${Math.round(anchor.sx - x)}px`);
     el.dataset.side = y >= anchor.sy ? 'below' : 'above'; // the leader follows the true side
     el.style.visibility = 'visible';
   });
@@ -91,6 +95,7 @@ export function ClaimCard(props: {
     try {
       await navigator.clipboard.writeText(link);
       setCopied('ok');
+      buzz('nudge');
     } catch {
       setCopied('fail');
     }
@@ -111,7 +116,12 @@ export function ClaimCard(props: {
           <div className="claim-name">{claim.name}</div>
           <div className="claim-byline">charted by {claim.sailor}</div>
           {/* the reference IS the share control — copy the bearing */}
-          <button className="ref-share" onClick={copyLink} title="copy a link to this spot">
+          <button
+            className="ref-share"
+            onClick={copyLink}
+            title="copy a link to this spot"
+            aria-label="Copy a link to this place"
+          >
             ref {Math.round(feature.x)} · {Math.round(feature.y)}{' '}
             <span className="ref-mark" aria-live="polite">{copied === 'ok' ? 'copied' : '⧉'}</span>
           </button>
@@ -200,6 +210,7 @@ export function Receipt(props: {
     try {
       await navigator.clipboard.writeText(link);
       setCopied('ok');
+      buzz('nudge');
     } catch {
       setCopied('fail');
     }
@@ -212,7 +223,12 @@ export function Receipt(props: {
       </div>
       <div className="le-actions">
         {/* the reference IS the share control — copy the bearing */}
-        <button className="ref-share" onClick={copyLink} title="copy a link to this spot">
+        <button
+          className="ref-share"
+          onClick={copyLink}
+          title="copy a link to this spot"
+          aria-label="Copy a link to this place"
+        >
           ref {Math.round(claim.x)} · {Math.round(claim.y)}{' '}
           <span className="ref-mark" aria-live="polite">{copied === 'ok' ? 'copied' : '⧉'}</span>
         </button>

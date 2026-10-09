@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { WebHaptics } from 'web-haptics';
+import { buzz } from './haptics';
 import { WorldView } from './engine/world';
 import { findHarbor, featuresInBox, type Feature } from './world/features';
 import {
@@ -16,7 +16,6 @@ import { FirstNote } from './ui/FirstNote';
 import { Logbook } from './ui/Logbook';
 
 const SAILOR_KEY = 'nullius.sailor';
-const HAPTICS_KEY = 'nullius.haptics';
 
 /** localStorage can throw (private mode, denied storage) — never fatal */
 function safeStore(key: string, value: string) {
@@ -33,16 +32,7 @@ function safeRead(key: string): string {
     return '';
   }
 }
-// web-haptics covers Android's vibrate and iOS Safari's hidden-switch
-// click; the honourable opt-out lives in the sailing note
-const haptics = new WebHaptics();
-function buzz(kind: 'success' | 'error' | 'nudge') {
-  try {
-    if (safeRead(HAPTICS_KEY) !== 'off') void haptics.trigger(kind);
-  } catch {
-    /* no haptics */
-  }
-}
+const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 // a screen point is "clear" when it misses every furniture rectangle —
 // measured, not assumed, so gaps in the mobile layout still count
@@ -331,11 +321,23 @@ export default function App() {
         ),
       );
     } else if (res.reason === 'taken') {
+      buzz('error'); // the race was lost — the verdict needs a body
       const c = await fetchClaim(target.f.id);
       if (c) pushClaim(c);
+      // even when the winner's inscription can't be fetched, the verdict
+      // must be told — never a silent form
+      const verdict: Claim = c ?? {
+        feature_key: target.f.id,
+        kind: target.f.kind,
+        name: 'claimed',
+        x: target.f.x,
+        y: target.f.y,
+        sailor: 'another sailor',
+        created_at: '',
+      };
       setSelected((cur) => {
         if (cur?.f.id !== target.f.id) return cur;
-        setTaken(c ?? null);
+        setTaken(verdict);
         return cur;
       });
     } else {
@@ -400,6 +402,7 @@ export default function App() {
       cardSank.current = false;
       return;
     }
+    if (reducedMotion()) return; // exits are for those who want them
     setSelLeaving(gone);
     const t = setTimeout(() => setSelLeaving(null), 240);
     return () => clearTimeout(t);
@@ -408,6 +411,7 @@ export default function App() {
     if (receipt || !lastRcpt.current) return;
     const gone = lastRcpt.current;
     lastRcpt.current = null;
+    if (reducedMotion()) return;
     setRcptLeaving(gone);
     const t = setTimeout(() => setRcptLeaving(null), 240);
     return () => clearTimeout(t);
