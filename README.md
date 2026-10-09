@@ -1,69 +1,82 @@
-# React + TypeScript + Vite
+# nullius
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+*a chart of unclaimed lands*
 
-Currently, two official plugins are available:
+Sail an endless procedural archipelago drawn as a hand-engraved nautical
+chart. Every red pennant is a place nobody has named yet. Reach one, give it
+a name, and it is inked onto the chart — permanently, for every sailor who
+comes after you.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+**[sail the chart →](https://nullius-three.vercel.app)**
 
-## Expanding the ESLint configuration
+![the chart](docs/launch-poster.png)
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+https://github.com/miguelgarglez/nullius/assets/launch.mp4 ·
+[docs/launch.mp4](docs/launch.mp4)
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## how it works
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+- **The world is a seed.** Terrain comes from hash-seeded value noise — fBm
+  with domain warp under an archipelago mask — evaluated in integer
+  arithmetic so every browser renders the identical coastline. Landmarks
+  (islands, peaks, bays, capes, lagoons, rocks) are extracted deterministically
+  per region cell, so a place exists at the same spot forever. A pinned
+  determinism test guards the terrain math: if it ever drifted, existing
+  names would orphan.
+- **The chart is engraved, not rendered.** Marching-squares contours become
+  double-struck coastlines; hills get hachure ticks; the sea gets soundings,
+  rhumb lines and a compass rose. Tiles render at multiple LODs and crossfade
+  as finer detail arrives — the paper never flashes placeholders.
+- **First writer wins.** Names live in a shared Supabase ledger
+  (`nullius_claims`, `feature_key` primary key, read-all/insert-only RLS).
+  A race is settled atomically by the database: the loser's card keeps a
+  durable "your name arrived too late" verdict beside the winner.
+- **Names are inscriptions, not tooltips.** A claimed place keeps a survey
+  benchmark on its exact point; its name inks in letter by letter on a quiet
+  vellum clearing, wraps or shrinks to fit the chart, yields rather than
+  overprints a neighbor, and is drawn after every mark so nothing crosses it.
+- **Other sailors are present.** A Supabase realtime channel broadcasts each
+  visitor's position as a small ship glyph on the chart, and the title margin
+  counts the sailors abroad.
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## run it
+
+```sh
+npm install
+npm run dev      # http://localhost:5173
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Without env vars it sails offline — the chart works, claiming waits for a
+ledger. To run against your own Supabase project, apply
+`supabase/migrations/`, then:
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```sh
+cp .env.example .env.local   # or create it:
+# VITE_SUPABASE_URL=https://<project>.supabase.co
+# VITE_SUPABASE_ANON_KEY=<publishable key>
 ```
+
+## controls
+
+| input | action |
+|---|---|
+| drag / touch | sail (fast release carries momentum) |
+| scroll / pinch | zoom |
+| tap a red pennant | name that place |
+| `logbook` | every reachable place in view, keyboard-operable |
+| `?` | bring back the sailing notes |
+| `Esc` | close whatever is open |
+| `#x,y,scale` | shareable bearing — the ref on any plaque copies one |
+
+Honors `prefers-reduced-motion` (glides and the sink ceremony settle
+instantly), keeps every target ≥44px on a 375px screen, and stays readable
+when the ledger is unreachable — the chart keeps sailing offline and the
+form never loses what you typed.
+
+## stack
+
+Vite + React + TypeScript, one canvas, zero map libraries. Supabase Postgres
+for the claims ledger, realtime for presence and new inscriptions. Deployed
+on Vercel.
+
+MIT — sail on.
