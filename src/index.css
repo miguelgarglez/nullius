@@ -693,6 +693,12 @@ input:focus-visible {
   }
 }
 
+/* one annotation at a time: while the logbook is open, the note
+   steps aside so neither covers the other's controls */
+.logbook ~ .first-note {
+  display: none;
+}
+
 /* reduced motion applies to the whole interface, including the
    overrides above — this block must come last */
 @media (prefers-reduced-motion: reduce) {

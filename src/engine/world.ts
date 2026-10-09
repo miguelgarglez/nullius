@@ -113,10 +113,13 @@ export class WorldView {
     this.listeners.push(() => target.removeEventListener(type, l, opts));
   }
 
-  setClaims(map: Map<string, ClaimLike>) {
-    // diff so fresh names can ink themselves in
-    for (const k of map.keys()) {
-      if (!this.claims.has(k)) this.claimBirth.set(k, performance.now());
+  setClaims(map: Map<string, ClaimLike>, settled = false) {
+    // diff so fresh names can ink themselves in — the bulk ledger load
+    // arrives already settled (no births, no ink animation)
+    if (!settled) {
+      for (const k of map.keys()) {
+        if (!this.claims.has(k)) this.claimBirth.set(k, performance.now());
+      }
     }
     this.claims = map;
   }
@@ -644,7 +647,7 @@ export class WorldView {
           // the first-run cue: a survey ring that breathes around one
           // pennant until the visitor acts on it (still under reduced motion)
           const t = this.reduced ? 0.45 : (performance.now() % 1800) / 1800;
-          ctx.strokeStyle = `rgba(179,58,43,${0.55 * (1 - t)})`;
+          ctx.strokeStyle = `rgba(179,58,43,${0.3 + 0.5 * (1 - t)})`;
           ctx.lineWidth = px(1.3);
           ctx.setLineDash([px(3), px(3.5)]);
           ctx.beginPath();
@@ -680,7 +683,18 @@ export class WorldView {
 
     // pass B — inscriptions, above every mark and pennant. The label
     // translates to its own absolute seat (lx, ltopW) — not the feature
-    // point — so pass B starts from the identity frame
+    // point — so pass B starts from the identity frame. A name that just
+    // landed draws first: fresh ink always wins its seat, older names
+    // yield to it for a few seconds — the moment must land
+    const nowMs = performance.now();
+    labelJobs.sort((a, b) => {
+      const fresh = (id: string) => {
+        const bb = this.claimBirth.get(id);
+        return bb !== undefined && nowMs - bb < 12000 ? 1 : 0;
+      };
+      const d = fresh(b.f.id) - fresh(a.f.id);
+      return d !== 0 ? d : b.f.prominence - a.f.prominence;
+    });
     for (const { f, claim } of labelJobs) {
       {
         ctx.save();

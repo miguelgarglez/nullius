@@ -195,7 +195,7 @@ export default function App() {
       for (const [k, c] of m) if (!merged.has(k)) merged.set(k, c);
       claimsRef.current = merged;
       setClaims(merged);
-      v.setClaims(merged);
+      v.setClaims(merged, true);
     });
 
     // modality: keyboard-driven logbook voyages arrive instantly,
@@ -357,7 +357,7 @@ export default function App() {
       const c = v.camera;
       const hw = cw / c.scale;
       const hh = ch / c.scale;
-      const cand = featuresInBox(c.x - hw, c.y - hh, c.x + hw, c.y + hh)
+      const cand = featuresInBox(c.x - hw * 3, c.y - hh * 3, c.x + hw * 3, c.y + hh * 3)
         .filter((f) => !claims.has(f.id))
         .sort((a, b) => Math.hypot(a.x - c.x, a.y - c.y) - Math.hypot(b.x - c.x, b.y - c.y))[0];
       if (cand) {
