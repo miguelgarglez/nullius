@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { WorldView } from './engine/world';
-import { findHarbor, type Feature } from './world/features';
+import { findHarbor, featuresInBox, type Feature } from './world/features';
 import {
   claimFeature,
   fetchClaim,
@@ -40,6 +40,20 @@ function buzz(pattern: number | number[]) {
   }
 }
 
+// a screen point is "clear" when it misses every furniture rectangle —
+// measured, not assumed, so gaps in the mobile layout still count
+const FURNITURE = ['.chart-title', '.chart-note-help', '.first-note', '.logbook-toggle'];
+const clearOfFurniture = (s: { x: number; y: number }, extra: string[] = []) => {
+  const m = 10;
+  for (const sel of [...FURNITURE, ...extra]) {
+    const r = document.querySelector<HTMLElement>(sel)?.getBoundingClientRect();
+    if (!r) continue;
+    if (s.x >= r.left - m && s.x <= r.right + m && s.y >= r.top - m && s.y <= r.bottom + m)
+      return false;
+  }
+  return true;
+};
+
 interface Anchored {
   f: Feature;
   sx: number;
@@ -76,6 +90,7 @@ export default function App() {
   const ceremonyTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const spawnRef = useRef<{ x: number; y: number } | null>(null);
   const lastInput = useRef<'key' | 'ptr'>('ptr');
+  const seekRef = useRef(false);
 
   const clearCeremony = () => {
     for (const t of ceremonyTimers.current) clearTimeout(t);
@@ -308,7 +323,9 @@ export default function App() {
 
   // the first-run cue: once the ledger is known, the unclaimed pennant
   // nearest the viewport's unobscured center wears a breathing survey
-  // ring — until the visitor acts (names, opens a card, dismisses)
+  // ring — until the visitor acts (names, opens a card, dismisses).
+  // "visible" is measured against the real furniture rects, so a pennant
+  // in a clear gap still counts on a small screen
   useEffect(() => {
     const v = viewRef.current;
     const el = ref.current;
@@ -319,14 +336,13 @@ export default function App() {
     }
     const cw = el.clientWidth;
     const ch = el.clientHeight;
-    const topBar = cw < 560 ? 80 : 150;
-    const bottomBar = cw < 560 ? 92 : 74;
     let best: Feature | null = null;
     let bestD = Infinity;
     for (const f of features) {
       if (claims.has(f.id)) continue;
       const s = v.toScreen(f.x, f.y);
-      if (s.x < 44 || s.x > cw - 44 || s.y < topBar || s.y > ch - bottomBar) continue;
+      if (s.x < 16 || s.x > cw - 16 || s.y < 16 || s.y > ch - 16) continue;
+      if (!clearOfFurniture(s, ['.logbook', '.claim-card', '.ledger-entry'])) continue;
       const d = Math.hypot(s.x - cw / 2, s.y - ch / 2);
       if (d < bestD) {
         bestD = d;
@@ -334,17 +350,34 @@ export default function App() {
       }
     }
     v.setGuideTarget(best);
+    // nothing reachable? the chart itself leans toward your first
+    // discovery — one gentle glide to the nearest unclaimed place
+    if (!best && !seekRef.current) {
+      seekRef.current = true;
+      const c = v.camera;
+      const hw = cw / c.scale;
+      const hh = ch / c.scale;
+      const cand = featuresInBox(c.x - hw, c.y - hh, c.x + hw, c.y + hh)
+        .filter((f) => !claims.has(f.id))
+        .sort((a, b) => Math.hypot(a.x - c.x, a.y - c.y) - Math.hypot(b.x - c.x, b.y - c.y))[0];
+      if (cand) {
+        // land the pennant just above center, clear of the bottom note
+        v.flyTo(cand.x, cand.y + (ch * 0.08) / c.scale);
+      }
+    }
   }, [features, claims, named, noteDismissed, selected, ledgerReady]);
 
   const selClaim = selected ? claims.get(selected.f.id) : undefined;
-  // the logbook lists what the chart actually shows right now — no
-  // entries for features lurking beyond the edge
+  // the logbook lists the places you could actually reach for right now:
+  // on screen and not sitting under the title, note, or controls
   const logbookFeatures = features.filter((f) => {
     const v = viewRef.current;
     const el = ref.current;
     if (!v || !el) return true;
     const s = v.toScreen(f.x, f.y);
-    return s.x > 16 && s.x < el.clientWidth - 16 && s.y > 16 && s.y < el.clientHeight - 16;
+    if (s.x < 16 || s.x > el.clientWidth - 16 || s.y < 16 || s.y > el.clientHeight - 16)
+      return false;
+    return clearOfFurniture(s);
   });
 
   return (

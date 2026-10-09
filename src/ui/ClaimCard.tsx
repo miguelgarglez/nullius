@@ -105,6 +105,8 @@ export function ClaimCard(props: {
     >
       {claim ? (
         <div className="claim-plaque">
+          {/* a lost race keeps its verdict in view, next to the winner */}
+          {taken && <div className="claim-taken">your name arrived too late —</div>}
           <div className="claim-name">{claim.name}</div>
           <div className="claim-byline">charted by {claim.sailor}</div>
           {/* the reference IS the share control — copy the bearing */}

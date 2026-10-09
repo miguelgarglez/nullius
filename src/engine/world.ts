@@ -706,10 +706,15 @@ export class WorldView {
         const ltopW = f.y + (ltop - sy0) / this.cam.scale;
         ctx.translate(lx, ltopW);
 
-        // a quiet clearing behind the name — the coast never fights it
+        // a clearing behind the name — two passes: a soft halo lifting
+        // the busy strokes, then a firmer seat so letters stay readable
+        // even over dense engraving at minimum zoom
         const halfW = Math.max(...ws) / 2;
-        ctx.fillStyle = 'rgba(217,222,202,0.55)';
-        ctx.fillRect(-halfW - px(6), -px(3), halfW * 2 + px(12), blockPx / this.cam.scale + px(6));
+        const blockW = blockPx / this.cam.scale;
+        ctx.fillStyle = 'rgba(217,222,202,0.42)';
+        ctx.fillRect(-halfW - px(11), -px(8), halfW * 2 + px(22), blockW + px(16));
+        ctx.fillStyle = 'rgba(217,222,202,0.8)';
+        ctx.fillRect(-halfW - px(5), -px(2), halfW * 2 + px(10), blockW + px(5));
 
         // the name inks letter by letter — a surveyor's hand, not a fade.
         // settled names carry cartographic weight, not caption size

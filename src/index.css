@@ -659,9 +659,13 @@ input:focus-visible {
     min-width: 44px;
   }
   .claim-close {
+    /* rides the tray's top edge — clear of the first input's hit area */
+    top: -44px;
+    right: 4px;
     width: 44px;
     height: 44px;
     font-size: 20px;
+    background: var(--wash);
   }
   .ledger-entry {
     left: 10px !important;
