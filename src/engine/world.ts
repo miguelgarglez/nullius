@@ -678,11 +678,12 @@ export class WorldView {
       ctx.restore();
     }
 
-    // pass B — inscriptions, above every mark and pennant
+    // pass B — inscriptions, above every mark and pennant. The label
+    // translates to its own absolute seat (lx, ltopW) — not the feature
+    // point — so pass B starts from the identity frame
     for (const { f, claim } of labelJobs) {
       {
         ctx.save();
-        ctx.translate(f.x, f.y);
 
         // -- the inscription ------------------------------------------
         // layout: wrap to two lines or shrink until the name fits the
