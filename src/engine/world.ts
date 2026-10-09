@@ -605,6 +605,9 @@ export class WorldView {
     // a closer zoom
     const drawn: [number, number, number, number][] = [];
     const ordered = [...this.features].sort((a, b) => b.prominence - a.prominence);
+    // pass A — marks and pennants. Inscriptions come after, in a second
+    // pass, so no survey mark or flag ever crosses a name
+    const labelJobs: { f: Feature; claim: ClaimLike }[] = [];
     for (const f of ordered) {
       const claim = this.claims.get(f.id);
       // uncharted pennants thin out when zoomed far out
@@ -628,7 +631,58 @@ export class WorldView {
         ctx.lineTo(0, bm * 1.5);
         ctx.stroke();
         ctx.restore();
+        labelJobs.push({ f, claim });
+        continue;
+      }
+      {
+        // uncharted pennant — stirs when within reach; presses harder
+        // under a finger (touch has no hover)
+        const hot = f === this.hovered;
+        const press = f === this.pressed;
+        const s = px(1);
+        if (f === this.guide) {
+          // the first-run cue: a survey ring that breathes around one
+          // pennant until the visitor acts on it (still under reduced motion)
+          const t = this.reduced ? 0.45 : (performance.now() % 1800) / 1800;
+          ctx.strokeStyle = `rgba(179,58,43,${0.55 * (1 - t)})`;
+          ctx.lineWidth = px(1.3);
+          ctx.setLineDash([px(3), px(3.5)]);
+          ctx.beginPath();
+          ctx.arc(0, px(-7), px(9 + t * 9), 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+        ctx.strokeStyle = '#B33A2B';
+        ctx.lineWidth = px(1.4);
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(0, -14 * s);
+        ctx.stroke();
+        ctx.fillStyle = press ? '#8E2B1F' : '#B33A2B';
+        ctx.beginPath();
+        const lift = hot || press ? px(2.5) : 0;
+        ctx.moveTo(0, -14 * s - lift);
+        ctx.lineTo(9 * s, -11 * s - lift);
+        ctx.lineTo(0, -8 * s - lift);
+        ctx.closePath();
+        ctx.fill();
+        if (hot || press) {
+          // a sounding-ring: the place acknowledges you
+          ctx.strokeStyle = press ? 'rgba(179,58,43,0.75)' : 'rgba(179,58,43,0.5)';
+          ctx.lineWidth = px(press ? 1.4 : 1);
+          ctx.beginPath();
+          ctx.arc(0, 0, px(7), 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    }
+
+    // pass B — inscriptions, above every mark and pennant
+    for (const { f, claim } of labelJobs) {
+      {
         ctx.save();
+        ctx.translate(f.x, f.y);
 
         // -- the inscription ------------------------------------------
         // layout: wrap to two lines or shrink until the name fits the
@@ -742,46 +796,6 @@ export class WorldView {
             ctx.arc(lastW / 2 + px(8), underY - px(8), px(2.6), 0, Math.PI * 2);
             ctx.fill();
           }
-        }
-      } else {
-        // uncharted pennant — stirs when within reach; presses harder
-        // under a finger (touch has no hover)
-        const hot = f === this.hovered;
-        const press = f === this.pressed;
-        const s = px(1);
-        if (f === this.guide) {
-          // the first-run cue: a survey ring that breathes around one
-          // pennant until the visitor acts on it (still under reduced motion)
-          const t = this.reduced ? 0.45 : (performance.now() % 1800) / 1800;
-          ctx.strokeStyle = `rgba(179,58,43,${0.55 * (1 - t)})`;
-          ctx.lineWidth = px(1.3);
-          ctx.setLineDash([px(3), px(3.5)]);
-          ctx.beginPath();
-          ctx.arc(0, px(-7), px(9 + t * 9), 0, Math.PI * 2);
-          ctx.stroke();
-          ctx.setLineDash([]);
-        }
-        ctx.strokeStyle = '#B33A2B';
-        ctx.lineWidth = px(1.4);
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.lineTo(0, -14 * s);
-        ctx.stroke();
-        ctx.fillStyle = press ? '#8E2B1F' : '#B33A2B';
-        ctx.beginPath();
-        const lift = hot || press ? px(2.5) : 0;
-        ctx.moveTo(0, -14 * s - lift);
-        ctx.lineTo(9 * s, -11 * s - lift);
-        ctx.lineTo(0, -8 * s - lift);
-        ctx.closePath();
-        ctx.fill();
-        if (hot || press) {
-          // a sounding-ring: the place acknowledges you
-          ctx.strokeStyle = press ? 'rgba(179,58,43,0.75)' : 'rgba(179,58,43,0.5)';
-          ctx.lineWidth = px(press ? 1.4 : 1);
-          ctx.beginPath();
-          ctx.arc(0, 0, px(7), 0, Math.PI * 2);
-          ctx.stroke();
         }
       }
       ctx.restore();
