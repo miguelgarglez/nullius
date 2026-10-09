@@ -86,8 +86,9 @@ form never loses what you typed.
 Vite + React + TypeScript, one canvas, zero map libraries. Supabase Postgres
 for the claims ledger (schema `nullius` of a shared project), realtime for
 presence and new inscriptions. A Cloudflare cron worker (`keepalive/`) reads
-one row once a day so the free project does not idle into a pause — deploy it
-with `npx wrangler deploy` from `keepalive/` after `npx wrangler secret put
+one row once a day as a best-effort nudge against free-tier pausing — it helps,
+but Supabase can still pause an idle project — deploy it with
+`npx wrangler deploy` from `keepalive/` after `npx wrangler secret put
 SUPABASE_KEY`. Deployed on Vercel.
 
 ## a note on the film
