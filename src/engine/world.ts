@@ -37,6 +37,7 @@ export class WorldView {
   private lastPinch = 0;
   private dragMoved = 0;
   private trail: { t: number; x: number; y: number }[] = [];
+  private lastMouse: { x: number; y: number } | null = null;
   private features: Feature[] = [];
   private hovered: Feature | null = null;
   private pressed: Feature | null = null;
@@ -55,11 +56,19 @@ export class WorldView {
 
   constructor(canvas: HTMLCanvasElement, onFeatures: (fs: Feature[]) => void) {
     this.canvas = canvas;
+    if (import.meta.env.DEV) (window as unknown as { __view: WorldView }).__view = this;
     this.ctx = canvas.getContext('2d')!;
     this.onFeatures = onFeatures;
     this.mq = matchMedia('(prefers-reduced-motion: reduce)');
     this.reduced = this.mq.matches;
-    const onMq = (e: MediaQueryListEvent) => (this.reduced = e.matches);
+    const onMq = (e: MediaQueryListEvent) => {
+      this.reduced = e.matches;
+      // a preference change stills the sea immediately — no half-voyages
+      if (this.reduced) {
+        this.glide = null;
+        this.vel.x = this.vel.y = 0;
+      }
+    };
     this.mq.addEventListener('change', onMq);
     this.listeners.push(() => this.mq?.removeEventListener('change', onMq));
     const hq = matchMedia('(hover: hover)');
@@ -235,15 +244,11 @@ export class WorldView {
     this.listen(el, 'pointermove', (e) => {
       const p = this.pointers.get(e.pointerId);
       if (!p) {
-        if (!this.canHover) return;
-        // hovering: signal which pennant is within reach
+        // remember the last pointer spot — hover truth is recomputed each
+        // frame against the live camera (voyages can move the world under
+        // a still cursor)
         const rect = el.getBoundingClientRect();
-        const w = this.toWorld(e.clientX - rect.left, e.clientY - rect.top);
-        const hov = this.hitTest(w.x, w.y);
-        if (hov !== this.hovered) {
-          this.hovered = hov;
-          el.style.cursor = hov ? 'pointer' : '';
-        }
+        this.lastMouse = { x: e.clientX - rect.left, y: e.clientY - rect.top };
         return;
       }
       const dx = e.clientX - p.x;
@@ -287,17 +292,20 @@ export class WorldView {
           this.vel.x = this.vel.y = 0;
           if (!this.reduced && this.trail.length > 1) {
             const last = this.trail[this.trail.length - 1];
-            let first = last;
-            for (const s of this.trail) {
-              if (last.t - s.t <= 90) first = s;
-              else break;
-            }
+            // earliest sample still inside the window (trail is oldest→newest);
+            // sparse event streams may hold only one sample in 150ms — then
+            // fall back to the previous sample so the flick still registers
+            const first = this.trail.find((s) => last.t - s.t <= 150) ?? this.trail[this.trail.length - 2];
             const span = last.t - first.t;
-            // a pause before release means the hand stopped — no fling
-            if (span > 20 && e.timeStamp - last.t < 60) {
+            const dx = last.x - first.x;
+            const dy = last.y - first.y;
+            // a pause before release means the hand stopped — no fling.
+            // event dispatch adds tens of ms, so the recency bound is loose;
+            // the real pause signal is travel inside the window
+            if (span > 15 && dx * dx + dy * dy > 4 && e.timeStamp - last.t < 220) {
               const k = 16.67 / span;
-              this.vel.x = (-(last.x - first.x) / this.cam.scale) * k;
-              this.vel.y = (-(last.y - first.y) / this.cam.scale) * k;
+              this.vel.x = (-dx / this.cam.scale) * k;
+              this.vel.y = (-dy / this.cam.scale) * k;
             }
           }
         }
@@ -305,6 +313,13 @@ export class WorldView {
     };
     this.listen(el, 'pointerup', up);
     this.listen(el, 'pointercancel', up);
+    this.listen(el, 'pointerleave', () => {
+      this.lastMouse = null;
+      if (this.hovered) {
+        this.hovered = null;
+        el.style.cursor = '';
+      }
+    });
 
     this.listen(
       el,
@@ -320,8 +335,10 @@ export class WorldView {
         } else {
           this.cam.x -= e.deltaX / this.cam.scale;
           this.cam.y -= e.deltaY / this.cam.scale;
-          this.vel.x = -e.deltaX / this.cam.scale;
-          this.vel.y = -e.deltaY / this.cam.scale;
+          if (!this.reduced) {
+            this.vel.x = -e.deltaX / this.cam.scale;
+            this.vel.y = -e.deltaY / this.cam.scale;
+          }
         }
       },
       { passive: false },
@@ -332,6 +349,9 @@ export class WorldView {
       const t = e.target as HTMLElement | null;
       if (t && t.closest('input, textarea, select, [contenteditable], [role="dialog"], .first-note, .logbook')) return;
       const step = 60 / this.cam.scale;
+      if (e.key.startsWith('Arrow') || e.key === '+' || e.key === '=' || e.key === '-') {
+        this.glide = null; // steering interrupts any voyage
+      }
       if (e.key === 'ArrowLeft') this.cam.x -= step;
       if (e.key === 'ArrowRight') this.cam.x += step;
       if (e.key === 'ArrowUp') this.cam.y -= step;
@@ -368,15 +388,19 @@ export class WorldView {
       if (t >= 1) this.glide = null;
     } else if (this.pointers.size === 0) {
       // inertia when released — dt-normalized so refresh rate doesn't
-      // change how the sea carries you; still under reduced motion
-      const dtn = dt / 16.67;
-      cam.x += vel.x * dtn;
-      cam.y += vel.y * dtn;
-      const damp = Math.pow(0.94, dtn);
-      vel.x *= damp;
-      vel.y *= damp;
-      if (this.reduced || Math.abs(vel.x) + Math.abs(vel.y) < 0.001) {
+      // change how the sea carries you; reduced motion never drifts
+      if (this.reduced) {
         vel.x = vel.y = 0;
+      } else {
+        const dtn = dt / 16.67;
+        cam.x += vel.x * dtn;
+        cam.y += vel.y * dtn;
+        const damp = Math.pow(0.94, dtn);
+        vel.x *= damp;
+        vel.y *= damp;
+        if (Math.abs(vel.x) + Math.abs(vel.y) < 0.001) {
+          vel.x = vel.y = 0;
+        }
       }
     }
 
@@ -461,6 +485,15 @@ export class WorldView {
 
     // -- labels + pennants (screen-space overlay pass, world coords) -----
     this.features = featuresInBox(vx0, vy0, vx1, vy1);
+    // hover truth: recompute against the live camera every frame
+    if (this.canHover && this.pointers.size === 0 && this.lastMouse) {
+      const w = this.toWorld(this.lastMouse.x, this.lastMouse.y);
+      const hov = this.hitTest(w.x, w.y);
+      if (hov !== this.hovered) {
+        this.hovered = hov;
+        this.canvas.style.cursor = hov ? 'pointer' : '';
+      }
+    }
     this.drawLabels(ctx);
     this.drawShips(ctx);
 
@@ -475,7 +508,9 @@ export class WorldView {
     this.onFrame?.();
   };
 
-  /** Draw the nearest cached ancestor tile covering (lod,tx,ty). */
+  /** Draw the nearest cached ancestor tile covering (lod,tx,ty). When no
+   *  ancestor exists at all, render the coarsest one synchronously — a
+   *  blurred coastline beats a blank rectangle every time. */
   private drawParentTile(
     ctx: CanvasRenderingContext2D,
     lod: number,
@@ -483,20 +518,35 @@ export class WorldView {
     ty: number,
     tw: number,
   ): boolean {
+    const place = (t: HTMLCanvasElement, plod: number, ptx: number, pty: number) => {
+      const pw = tileWorld(plod);
+      const sx = ((tx * tw - ptx * pw) / pw) * 256;
+      const sy = ((ty * tw - pty * pw) / pw) * 256;
+      const ss = (tw / pw) * 256;
+      ctx.drawImage(t, sx, sy, ss, ss, tx * tw, ty * tw, tw, tw);
+    };
     for (let p = 1; p <= 4 && lod - p >= MIN_LOD; p++) {
       const pw = tileWorld(lod - p);
       const ptx = Math.floor((tx * tw) / pw);
       const pty = Math.floor((ty * tw) / pw);
       const t = this.tiles.get(`${lod - p}:${ptx}:${pty}`);
       if (!t) continue;
-      // crop the child region out of the parent tile and stretch it over
-      const sx = ((tx * tw - ptx * pw) / pw) * 256;
-      const sy = ((ty * tw - pty * pw) / pw) * 256;
-      const ss = (tw / pw) * 256;
-      ctx.drawImage(t, sx, sy, ss, ss, tx * tw, ty * tw, tw, tw);
+      place(t, lod - p, ptx, pty);
       return true;
     }
-    return false;
+    // nothing cached anywhere above — ink the coarsest chart now
+    const clod = MIN_LOD;
+    const cw = tileWorld(clod);
+    const ctx0 = Math.floor((tx * tw) / cw);
+    const cty = Math.floor((ty * tw) / cw);
+    const ckey = `${clod}:${ctx0}:${cty}`;
+    let t = this.tiles.get(ckey);
+    if (!t) {
+      t = renderTile(clod, ctx0, cty);
+      this.tiles.set(ckey, t);
+    }
+    place(t, clod, ctx0, cty);
+    return true;
   }
 
   private drawHaze(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, tx: number, ty: number) {

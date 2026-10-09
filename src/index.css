@@ -1,11 +1,13 @@
 :root {
   --vellum: #e0e4d1;
-  --paper: #eceddb;
   --ink: #22303b;
   --ink-soft: #5d6d75;
   --vermilion: #b33a2b;
   --verdigris: #4e7e74;
   --brass: #a8834f;
+  --rule: rgba(34, 48, 59, 0.55);
+  --rule-soft: rgba(34, 48, 59, 0.22);
+  --wash: rgba(214, 220, 199, 0.82);
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 }
 
@@ -45,45 +47,45 @@ body,
   outline-offset: -2px;
 }
 
-/* -- the title cartouche: marginalia in the chart's own language --------- */
+/* all UI speaks in marginalia: hairline rules, small caps, the chart's
+   own ink — no paper slips, no drop shadows, nothing that floats */
+
+/* -- the survey identifier ------------------------------------------------ */
 .chart-title {
   position: absolute;
   top: 20px;
   left: 20px;
-  padding: 10px 16px 9px;
-  border: 1px solid rgba(34, 48, 59, 0.55);
-  outline: 3px double rgba(34, 48, 59, 0.35);
-  outline-offset: 2px;
-  background: rgba(228, 231, 209, 0.82);
+  padding: 4px 12px 7px;
+  border-top: 1.5px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  background: transparent;
   user-select: none;
   z-index: 15;
 }
 .chart-title h1 {
-  font-family: 'IM Fell English SC', 'IM Fell English', serif;
-  font-weight: 400;
-  font-size: 21px;
-  letter-spacing: 0.3em;
+  font-family: 'EB Garamond', Georgia, serif;
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: 0.42em;
   margin: 0;
   color: var(--ink);
 }
 .chart-title .sub {
-  font-family: 'IM Fell English', serif;
+  font-family: 'EB Garamond', serif;
   font-variant: small-caps;
-  letter-spacing: 0.16em;
-  font-size: 11px;
+  letter-spacing: 0.2em;
+  font-size: 10.5px;
   color: var(--ink-soft);
-  margin: 3px 0 0;
-}
-.chart-title .sub .plate {
-  color: var(--brass);
+  margin: 2px 0 0;
 }
 .chart-title .ledger-line {
-  font-family: 'IM Fell English', serif;
+  font-family: 'EB Garamond', serif;
   font-size: 12px;
   color: var(--ink-soft);
   margin-top: 6px;
   padding-top: 5px;
-  border-top: 1px solid rgba(34, 48, 59, 0.25);
+  border-top: 1px solid var(--rule-soft);
+  font-variant-numeric: tabular-nums;
 }
 
 /* -- first sail: a marginal note, not a modal ---------------------------- */
@@ -96,24 +98,23 @@ body,
   align-items: baseline;
   gap: 10px;
   max-width: min(560px, calc(100vw - 150px));
-  padding: 9px 14px;
-  background: rgba(238, 240, 222, 0.92);
-  border: 1px solid rgba(34, 48, 59, 0.35);
-  box-shadow: 0 6px 18px rgba(34, 48, 59, 0.14);
-  font-size: 14px;
-  font-style: italic;
+  padding: 7px 2px;
+  background: transparent;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule-soft);
+  font-size: 13.5px;
   color: var(--ink);
   z-index: 22;
   animation: slip-in-c 0.35s var(--ease-out);
 }
 .first-note .fn-mark {
   color: var(--vermilion);
-  font-style: normal;
   flex-shrink: 0;
 }
 .first-note b {
   font-weight: 600;
-  font-style: normal;
+  font-variant: small-caps;
+  letter-spacing: 0.06em;
 }
 .first-note button {
   background: none;
@@ -124,6 +125,9 @@ body,
   padding: 0 6px;
   align-self: center;
 }
+.first-note button:hover {
+  color: var(--ink);
+}
 
 /* the "?" in the margin calls the note back */
 .chart-note-help {
@@ -132,11 +136,11 @@ body,
   bottom: 20px;
   width: 30px;
   height: 30px;
-  font-family: 'IM Fell English', serif;
-  font-size: 15px;
+  font-family: 'EB Garamond', serif;
+  font-size: 14px;
   color: var(--ink-soft);
-  background: rgba(238, 240, 222, 0.8);
-  border: 1px solid rgba(34, 48, 59, 0.3);
+  background: transparent;
+  border: 1px solid var(--rule-soft);
   border-radius: 50%;
   cursor: pointer;
   z-index: 20;
@@ -146,36 +150,33 @@ body,
   border-color: var(--ink);
 }
 
-/* -- the naming card: a paper slip pinned to the chart ------------------- */
+/* -- the naming annotation ------------------------------------------------ */
 .claim-card {
   position: absolute;
   width: 224px;
-  background: var(--paper);
-  border: 1px solid rgba(34, 48, 59, 0.28);
-  box-shadow:
-    0 1px 0 rgba(34, 48, 59, 0.12),
-    0 10px 28px rgba(34, 48, 59, 0.18);
-  padding: 14px 14px 12px;
+  visibility: hidden; /* placed by measurement before first paint */
+  background: transparent;
+  border-top: 1.5px solid var(--rule);
+  border-bottom: 1px solid var(--rule-soft);
+  padding: 8px 2px 10px;
   z-index: 30;
   animation: slip-in 0.28s var(--ease-out);
 }
-.claim-card::before {
-  /* the pin points down at the pennant below the slip */
+.claim-card::after {
+  /* leader to the survey point below */
   content: '';
   position: absolute;
-  bottom: -5px;
   left: 50%;
-  width: 8px;
-  height: 8px;
-  margin-left: -4px;
-  border-radius: 50%;
-  background: var(--vermilion);
-  box-shadow: 0 1px 2px rgba(34, 48, 59, 0.4);
+  bottom: -26px;
+  width: 1px;
+  height: 24px;
+  background: linear-gradient(to bottom, rgba(34, 48, 59, 0.6), rgba(34, 48, 59, 0.05));
+  pointer-events: none;
 }
 @keyframes slip-in {
   from {
     opacity: 0;
-    transform: translateY(6px) rotate(-0.6deg);
+    transform: translateY(6px);
   }
   to {
     opacity: 1;
@@ -194,10 +195,10 @@ body,
   }
 }
 .claim-kicker {
-  font-family: 'IM Fell English', serif;
+  font-family: 'EB Garamond', serif;
+  font-variant: small-caps;
   font-size: 11px;
-  letter-spacing: 0.18em;
-  text-transform: lowercase;
+  letter-spacing: 0.22em;
   color: var(--ink-soft);
   margin-bottom: 8px;
 }
@@ -205,10 +206,9 @@ body,
   display: block;
   width: 100%;
   margin: 0 0 8px;
-  padding: 6px 8px;
+  padding: 6px 2px;
   font-family: 'EB Garamond', serif;
   font-size: 16px;
-  font-style: italic;
   color: var(--ink);
   background: transparent;
   border: none;
@@ -220,13 +220,14 @@ body,
   border-bottom-color: var(--vermilion);
 }
 .claim-card button[type='submit'] {
-  font-family: 'IM Fell English', serif;
+  font-family: 'EB Garamond', serif;
+  font-variant: small-caps;
   font-size: 13px;
-  letter-spacing: 0.12em;
-  color: var(--paper);
+  letter-spacing: 0.14em;
+  color: var(--vellum);
   background: var(--ink);
   border: none;
-  padding: 7px 14px;
+  padding: 8px 14px;
   cursor: pointer;
 }
 .claim-card button[type='submit']:disabled {
@@ -238,8 +239,8 @@ body,
 }
 .claim-close {
   position: absolute;
-  top: 2px;
-  right: 2px;
+  top: 0;
+  right: -4px;
   background: none;
   border: none;
   font-size: 16px;
@@ -263,8 +264,24 @@ body,
   font-size: 13px;
   color: var(--ink-soft);
 }
+.plaque-share {
+  margin-top: 6px;
+  font-family: 'EB Garamond', serif;
+  font-variant: small-caps;
+  font-size: 11.5px;
+  letter-spacing: 0.14em;
+  color: var(--ink);
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--rule);
+  padding: 2px 0;
+  cursor: pointer;
+}
+.plaque-share:hover {
+  color: var(--vermilion);
+  border-bottom-color: var(--vermilion);
+}
 .claim-taken {
-  font-style: italic;
   font-size: 14px;
   color: var(--ink-soft);
   line-height: 1.4;
@@ -274,7 +291,6 @@ body,
 }
 .claim-error {
   min-height: 0;
-  font-style: italic;
   font-size: 13px;
   color: var(--vermilion);
   margin-top: 4px;
@@ -283,7 +299,7 @@ body,
   margin: 0;
 }
 
-/* -- the sink: the naming slip dissolves into the chart ------------------ */
+/* -- the sink: the naming note dissolves into the chart ------------------- */
 .claim-card.sinking {
   animation: sink-in 0.38s cubic-bezier(0.4, 0, 0.7, 0.3) forwards;
 }
@@ -302,10 +318,11 @@ body,
 .ledger-entry {
   position: absolute;
   width: 224px;
-  padding: 8px 0 10px;
+  visibility: hidden;
+  padding: 7px 0 9px;
   z-index: 28;
-  border-top: 1px solid rgba(34, 48, 59, 0.6);
-  border-bottom: 1px solid rgba(34, 48, 59, 0.25);
+  border-top: 1.5px solid var(--rule);
+  border-bottom: 1px solid var(--rule-soft);
   background: transparent;
   animation: fade-in 0.3s ease-out;
 }
@@ -313,11 +330,11 @@ body,
   /* leader to the survey mark above */
   content: '';
   position: absolute;
-  top: -42px;
+  top: -46px;
   left: 50%;
   width: 1px;
-  height: 40px;
-  background: linear-gradient(to top, rgba(34, 48, 59, 0.7), rgba(34, 48, 59, 0.05));
+  height: 44px;
+  background: linear-gradient(to top, rgba(34, 48, 59, 0.65), rgba(34, 48, 59, 0.05));
 }
 @keyframes fade-in {
   from {
@@ -325,10 +342,10 @@ body,
   }
 }
 .le-kicker {
-  font-family: 'IM Fell English', serif;
+  font-family: 'EB Garamond', serif;
   font-variant: small-caps;
   font-size: 10.5px;
-  letter-spacing: 0.22em;
+  letter-spacing: 0.24em;
   color: var(--ink-soft);
   margin-bottom: 4px;
 }
@@ -344,18 +361,18 @@ body,
 }
 .le-actions {
   display: flex;
-  gap: 8px;
+  gap: 14px;
   margin-top: 8px;
 }
 .le-actions button {
-  font-family: 'IM Fell English', serif;
+  font-family: 'EB Garamond', serif;
   font-size: 11.5px;
   font-variant: small-caps;
   letter-spacing: 0.14em;
   color: var(--ink);
   background: transparent;
   border: none;
-  border-bottom: 1px solid rgba(34, 48, 59, 0.45);
+  border-bottom: 1px solid var(--rule);
   padding: 2px 0;
   cursor: pointer;
 }
@@ -371,7 +388,7 @@ body,
   color: var(--ink-soft);
   background: transparent;
   border: none;
-  border-bottom: 1px dashed rgba(34, 48, 59, 0.4);
+  border-bottom: 1px dashed var(--rule);
   padding: 2px 0;
 }
 
@@ -381,15 +398,19 @@ body,
   top: 20px;
   left: 50%;
   transform: translateX(-50%);
-  font-family: 'IM Fell English', serif;
-  font-style: italic;
-  font-size: 14px;
+  font-family: 'EB Garamond', serif;
+  font-size: 13.5px;
   color: var(--ink);
-  background: rgba(238, 240, 222, 0.92);
-  border: 1px solid rgba(34, 48, 59, 0.2);
-  padding: 7px 16px;
+  background: transparent;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule-soft);
+  padding: 6px 4px;
   z-index: 25;
   animation: slip-in-c 0.3s var(--ease-out);
+}
+.toast::before {
+  content: '※ ';
+  color: var(--vermilion);
 }
 
 /* -- the logbook: places in view, keyboard-operable ---------------------- */
@@ -397,20 +418,22 @@ body,
   position: absolute;
   right: 20px;
   bottom: 20px;
-  font-family: 'IM Fell English', serif;
+  font-family: 'EB Garamond', serif;
+  font-variant: small-caps;
   font-size: 13px;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.16em;
   color: var(--ink-soft);
-  background: rgba(238, 240, 222, 0.85);
-  border: 1px solid rgba(34, 48, 59, 0.3);
-  padding: 7px 14px;
+  background: transparent;
+  border: none;
+  border-top: 1.5px solid var(--rule);
+  border-bottom: 1px solid var(--rule-soft);
+  padding: 7px 2px;
   cursor: pointer;
   z-index: 20;
 }
 .logbook-toggle:hover,
 .logbook-toggle[aria-expanded='true'] {
   color: var(--ink);
-  border-color: var(--ink);
 }
 .logbook {
   position: absolute;
@@ -419,19 +442,21 @@ body,
   width: 240px;
   max-height: 50vh;
   overflow-y: auto;
-  background: var(--paper);
-  border: 1px solid rgba(34, 48, 59, 0.3);
-  box-shadow: 0 10px 28px rgba(34, 48, 59, 0.18);
+  background: var(--wash);
+  backdrop-filter: blur(2px);
+  border-top: 1.5px solid var(--rule);
+  border-bottom: 1px solid var(--rule-soft);
   z-index: 25;
   animation: slip-in 0.25s var(--ease-out);
 }
 .logbook-head {
-  font-family: 'IM Fell English', serif;
+  font-family: 'EB Garamond', serif;
+  font-variant: small-caps;
   font-size: 11px;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.2em;
   color: var(--ink-soft);
   padding: 10px 14px 6px;
-  border-bottom: 1px solid rgba(34, 48, 59, 0.15);
+  border-bottom: 1px solid var(--rule-soft);
 }
 .logbook ul {
   list-style: none;
@@ -464,7 +489,8 @@ body,
   color: var(--ink-soft);
 }
 .logbook .lb-kind {
-  font-family: 'IM Fell English', serif;
+  font-family: 'EB Garamond', serif;
+  font-variant: small-caps;
   font-size: 11px;
   color: var(--ink-soft);
   align-self: center;
@@ -477,9 +503,10 @@ body,
   color: var(--ink-soft);
 }
 
-/* pressed states: buttons acknowledge the hand */
+/* pressed states: controls acknowledge the hand */
 .logbook-toggle:active,
 .le-actions button:active,
+.plaque-share:active,
 .claim-card button[type='submit']:active,
 .first-note button:active,
 .chart-note-help:active,
@@ -516,55 +543,96 @@ input:focus-visible {
   .chart-title {
     top: 12px;
     left: 12px;
-    padding: 8px 12px 7px;
+    padding: 3px 8px 6px;
   }
   .chart-title h1 {
-    font-size: 17px;
+    font-size: 13px;
   }
   .chart-title .sub {
-    font-size: 9.5px;
+    font-size: 9px;
+  }
+  .chart-title .ledger-line {
+    font-size: 11px;
   }
   .first-note {
     left: 12px;
     right: auto;
     bottom: 14px;
     transform: none;
-    max-width: calc(100vw - 136px);
-    font-size: 13px;
+    max-width: calc(100vw - 128px);
+    font-size: 12.5px;
     animation: slip-in 0.35s var(--ease-out);
   }
+  /* the "?" moves to the top margin — the bottom belongs to the note */
+  .chart-note-help {
+    left: auto;
+    right: 12px;
+    top: 12px;
+    bottom: auto;
+    width: 44px;
+    height: 44px;
+  }
+  /* naming becomes a bottom tray — the pennant stays visible above it */
+  .claim-card {
+    left: 10px !important;
+    right: 10px;
+    top: auto !important;
+    bottom: 10px;
+    width: auto;
+    visibility: visible;
+  }
+  .claim-card::after {
+    display: none;
+  }
+  /* every touch target at least 44px tall */
   .first-note button {
     min-width: 44px;
     min-height: 44px;
     align-self: flex-start;
   }
-  .chart-note-help {
-    left: 14px;
-    bottom: 14px;
-    display: none; /* margin is tight; the note itself lives bottom-left */
-  }
   .logbook-toggle {
     right: 14px;
     bottom: 14px;
-    min-height: 40px;
+    min-height: 44px;
+    padding: 11px 4px;
   }
   .logbook {
-    right: 14px;
-    bottom: 62px;
-    width: min(240px, calc(100vw - 28px));
+    right: 10px;
+    bottom: 64px;
+    width: min(240px, calc(100vw - 20px));
   }
-  .claim-card {
-    width: 216px;
+  .logbook li button {
+    min-height: 44px;
+    align-items: center;
+  }
+  .claim-card input {
+    min-height: 44px;
+  }
+  .claim-card button[type='submit'],
+  .le-actions button,
+  .plaque-share {
+    min-height: 44px;
   }
   .claim-close {
     width: 44px;
     height: 44px;
     font-size: 20px;
   }
+  .ledger-entry {
+    left: 10px !important;
+    right: 10px;
+    width: auto;
+    visibility: visible;
+  }
   .toast {
     top: auto;
-    bottom: 68px;
+    bottom: 72px;
     font-size: 13px;
     max-width: calc(100vw - 28px);
+  }
+  /* while a naming annotation is open the note steps aside */
+  .claim-card ~ .first-note,
+  .ledger-entry ~ .first-note {
+    display: none;
   }
 }

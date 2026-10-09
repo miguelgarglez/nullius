@@ -35,13 +35,14 @@ const table = () => client()!.from('nullius_claims');
 
 export const ledgerOnline = () => client() !== null;
 
-/** Full ledger read — the chart boots with every name ever given. */
-export async function loadClaims(): Promise<Map<string, Claim>> {
+/** Full ledger read — the chart boots with every name ever given.
+ *  Returns null when the ledger is unreachable so callers can say so. */
+export async function loadClaims(): Promise<Map<string, Claim> | null> {
   const map = new Map<string, Claim>();
   const c = client();
-  if (!c) return map;
+  if (!c) return null;
   const { data, error } = await table().select('*').limit(10000);
-  if (error || !data) return map;
+  if (error || !data) return null;
   for (const row of data as Claim[]) map.set(row.feature_key, row);
   return map;
 }

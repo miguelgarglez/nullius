@@ -62,7 +62,8 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [taken, setTaken] = useState<Claim | null>(null);
   const [cardError, setCardError] = useState<string | null>(null);
-  const [online] = useState(ledgerOnline);
+  const [online, setOnline] = useState(ledgerOnline);
+  const [pos, setPos] = useState<{ x: number; y: number; s: number } | null>(null);
   const [logOpen, setLogOpen] = useState(false);
   const [features, setFeatures] = useState<Feature[]>([]);
   const [sailed, setSailed] = useState(false);
@@ -126,11 +127,21 @@ export default function App() {
     });
 
     // cards ride the camera on every rendered frame, not a poll
+    let posTick = 0;
     v.setOnFrame(() => {
       const c = v.camera;
       if (spawnRef.current && Math.hypot(c.x - spawnRef.current.x, c.y - spawnRef.current.y) > 60 / c.scale) {
         spawnRef.current = null;
         setSailed(true);
+      }
+      // the survey identifier reads your live position — throttled to
+      // keep the numbers still enough to read
+      if (now8th()) {
+        const p = { x: Math.round(c.x), y: Math.round(c.y), s: Math.round(c.scale * 100) / 100 };
+        setPos((cur) => (cur && cur.x === p.x && cur.y === p.y && cur.s === p.s ? cur : p));
+      }
+      function now8th() {
+        return ++posTick % 8 === 0;
       }
       setSelected((cur) => {
         if (!cur) return cur;
@@ -158,7 +169,10 @@ export default function App() {
       }
     });
     loadClaims().then((m) => {
-      if (!m.size) return;
+      if (m === null) {
+        setOnline(false);
+        return;
+      }
       const merged = new Map(claimsRef.current);
       for (const [k, c] of m) if (!merged.has(k)) merged.set(k, c);
       claimsRef.current = merged;
@@ -230,10 +244,10 @@ export default function App() {
       buzz(12);
       // stage 1 — the slip sinks into the chart where the name now lives
       const s = viewRef.current?.toScreen(target.f.x, target.f.y);
-      if (s) {
-        const cardCx = Math.min(Math.max(target.sx - 110, 8), window.innerWidth - 240) + 110;
-        const cardCy = Math.min(Math.max(target.sy - 120, 8), window.innerHeight - 190) + 60;
-        setSinking({ dx: s.x - cardCx, dy: s.y - cardCy });
+      const cardEl = document.querySelector<HTMLElement>('.claim-card');
+      if (s && cardEl) {
+        const r = cardEl.getBoundingClientRect();
+        setSinking({ dx: s.x - (r.left + r.width / 2), dy: s.y - (r.top + r.height / 2) });
       }
       const claim = res.claim;
       const feat = target.f;
@@ -267,15 +281,6 @@ export default function App() {
   };
 
   const selClaim = selected ? claims.get(selected.f.id) : undefined;
-  const cardPos = (a: { sx: number; sy: number }) => ({
-    left: Math.min(Math.max(a.sx - 110, 8), window.innerWidth - 248),
-    top: Math.min(Math.max(a.sy - 128, 8), window.innerHeight - 210),
-  });
-  // the ledger entry sits below the survey mark, clear of the new name
-  const receiptPos = (a: { sx: number; sy: number }) => ({
-    left: Math.min(Math.max(a.sx - 110, 8), window.innerWidth - 240),
-    top: Math.min(a.sy + 42, window.innerHeight - 170),
-  });
 
   return (
     <div className="app">
@@ -287,13 +292,17 @@ export default function App() {
       />
       <header className="chart-title">
         <h1>NULLIUS</h1>
-        <p className="sub">
-          CHART OF UNCLAIMED LANDS <span className="plate">— plate nº ∞</span>
-        </p>
+        <p className="sub">chart of unclaimed lands</p>
         <p className="ledger-line">
+          {pos && (
+            <>
+              ref {pos.x} · {pos.y} · ×{pos.s.toFixed(2)}
+              <br />
+            </>
+          )}
           {online
             ? `${abroad} ${abroad === 1 ? 'sailor' : 'sailors'} abroad · ${claims.size} ${claims.size === 1 ? 'name' : 'names'} given`
-            : 'sailing offline — names will not be inked'}
+            : 'ledger unreachable — sailing offline'}
         </p>
       </header>
       {selected && (
@@ -311,10 +320,10 @@ export default function App() {
             setSelected(null);
             ref.current?.focus();
           }}
-          style={cardPos(selected)}
+          anchor={selected}
         />
       )}
-      {receipt && <Receipt claim={receipt.claim} onClose={() => setReceipt(null)} style={receiptPos(receipt)} />}
+      {receipt && <Receipt claim={receipt.claim} onClose={() => setReceipt(null)} anchor={receipt} />}
       <Logbook
         open={logOpen}
         features={features}
@@ -333,7 +342,7 @@ export default function App() {
           {toast}
         </div>
       )}
-      <FirstNote sailed={sailed} named={named || !!selected} dismissed={noteDismissed} onDismiss={setNoteDismissed} nudge={noteNudge} />
+      <FirstNote sailed={sailed} named={named} dismissed={noteDismissed} onDismiss={setNoteDismissed} nudge={noteNudge} />
       <button
         className="chart-note-help"
         onClick={() => {

@@ -17,13 +17,13 @@ export function tileWorld(lod: number): number {
 }
 
 const PAPER = '#dde1cf';
-const LAND = '#f2ebd8';
-const LAND_SHADE = '#e7dcbd';
+const LAND = '#d8dac2';
+const LAND_SHADE = '#bfc7a8';
 const INK = '#26333d';
 const INK_SOFT = '#5d6d75';
-const W_DEEP = '#d6dccb';
+const W_DEEP = '#b5c7bb';
 
-const W_SHALLOW = '#eae6d5';
+const W_SHALLOW = '#c9d9cd';
 
 
 const N = 110; // samples per tile side
@@ -45,9 +45,9 @@ function grain(): HTMLCanvasElement {
         hash2f(i >> 4, j >> 4, 779) * 0.1;
       const v = 190 + Math.floor(n * 60); // 190..250, paper fibre
       const o = (j * 256 + i) * 4;
-      img.data[o] = v;
+      img.data[o] = v - 8;
       img.data[o + 1] = v - 6;
-      img.data[o + 2] = v - 20;
+      img.data[o + 2] = v - 2;
       img.data[o + 3] = 26;
     }
   }
@@ -158,7 +158,7 @@ export function renderTile(lod: number, tx: number, ty: number): HTMLCanvasEleme
   const glowAlpha = [0.5, 0.65, 0.85];
   for (let k = 0; k < glowWidths.length; k++) {
     ctx.beginPath();
-    ctx.strokeStyle = `rgba(247,240,220,${glowAlpha[k]})`;
+    ctx.strokeStyle = `rgba(226,231,212,${glowAlpha[k]})`;
     ctx.lineWidth = glowWidths[k];
     ctx.lineJoin = 'round';
     for (const p of coast) polyToPath(ctx, p, sc, ox, oy, false);

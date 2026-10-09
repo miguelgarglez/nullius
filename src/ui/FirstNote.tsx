@@ -6,7 +6,7 @@ const SEEN_KEY = 'nullius.seen-intro';
 // advice: sail first, then name. It retires itself once both are done,
 // and the "?" in the margin calls it back.
 
-type Step = 'sail' | 'name' | 'done';
+type Step = 'sail' | 'name' | 'help' | 'done';
 
 export function FirstNote(props: {
   sailed: boolean;
@@ -23,9 +23,9 @@ export function FirstNote(props: {
     }
   });
 
-  // the "?" button calls the note back — straight to the naming advice
+  // the "?" button calls the note back — the full card, not just one step
   useEffect(() => {
-    if (props.nudge > 0) setStep('name');
+    if (props.nudge > 0) setStep('help');
   }, [props.nudge]);
 
   useEffect(() => {
@@ -49,14 +49,21 @@ export function FirstNote(props: {
   return (
     <div className="first-note" role="note">
       <span className="fn-mark">※</span>
-      {step === 'sail' ? (
+      {step === 'sail' && (
         <span>
           <b>drag</b> to sail · <b>scroll or pinch</b> to zoom · arrow keys steer
         </span>
-      ) : (
+      )}
+      {step === 'name' && (
         <span>
           <b>tap a red pennant</b> — the first sailor to name a place inks it onto this chart, forever, for
           everyone
+        </span>
+      )}
+      {step === 'help' && (
+        <span>
+          <b>drag</b> to sail · <b>scroll or pinch</b> to zoom · <b>tap a red pennant</b> to name a place
+          forever — the <b>logbook</b> lists everything in view
         </span>
       )}
       <button onClick={() => props.onDismiss(true)} aria-label="Dismiss">
