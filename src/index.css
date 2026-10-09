@@ -40,44 +40,75 @@ body,
   cursor: grabbing;
 }
 
-.masthead {
+/* -- the title cartouche: marginalia in the chart's own language --------- */
+.chart-title {
   position: absolute;
-  top: 22px;
-  left: 50%;
-  transform: translateX(-50%);
-  text-align: center;
-  pointer-events: none;
+  top: 20px;
+  left: 20px;
+  padding: 10px 16px 9px;
+  border: 1px solid rgba(34, 48, 59, 0.55);
+  outline: 3px double rgba(34, 48, 59, 0.35);
+  outline-offset: 2px;
+  background: rgba(240, 233, 214, 0.82);
   user-select: none;
+  z-index: 15;
 }
-.masthead h1 {
+.chart-title h1 {
   font-family: 'IM Fell English SC', 'IM Fell English', serif;
   font-weight: 400;
-  font-size: 30px;
-  letter-spacing: 0.34em;
+  font-size: 21px;
+  letter-spacing: 0.3em;
   margin: 0;
   color: var(--ink);
-  text-shadow: 0 0 18px rgba(240, 233, 214, 0.9);
 }
-.masthead .sub {
-  font-family: 'EB Garamond', serif;
+.chart-title .sub {
   font-style: italic;
-  font-size: 14px;
-  letter-spacing: 0.12em;
+  font-size: 12.5px;
   color: var(--ink-soft);
-  margin: 2px 0 0;
+  margin: 1px 0 0;
+}
+.chart-title .ledger-line {
+  font-family: 'IM Fell English', serif;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  margin-top: 6px;
+  padding-top: 5px;
+  border-top: 1px solid rgba(34, 48, 59, 0.25);
 }
 
-.cartouche {
+/* -- first sail: a marginal note, not a modal ---------------------------- */
+.first-note {
   position: absolute;
-  left: 24px;
-  bottom: 22px;
-  pointer-events: none;
-  user-select: none;
+  left: 50%;
+  bottom: 34px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  max-width: min(560px, calc(100vw - 40px));
+  padding: 9px 14px;
+  background: rgba(245, 239, 221, 0.9);
+  border: 1px solid rgba(34, 48, 59, 0.35);
+  box-shadow: 0 6px 18px rgba(34, 48, 59, 0.14);
+  font-size: 14px;
+  font-style: italic;
+  color: var(--ink);
+  z-index: 22;
+  animation: slip-in 0.35s var(--ease-out);
 }
-.cartouche-line {
-  font-family: 'IM Fell English', serif;
-  font-size: 13px;
+.first-note .fn-mark {
+  color: var(--vermilion);
+  font-style: normal;
+  flex-shrink: 0;
+}
+.first-note button {
+  background: none;
+  border: none;
   color: var(--ink-soft);
+  font-size: 15px;
+  cursor: pointer;
+  padding: 0 2px;
+  align-self: center;
 }
 
 /* -- the naming card: a paper slip pinned to the chart ------------------- */
@@ -382,5 +413,90 @@ body,
     right: 14px;
     bottom: 78px;
     width: min(240px, calc(100vw - 28px));
+  }
+}
+
+/* -- the sink: the naming slip dissolves into the chart ------------------ */
+.claim-card.sinking {
+  animation: sink-in 0.38s cubic-bezier(0.5, 0, 0.8, 0.4) forwards;
+}
+@keyframes sink-in {
+  to {
+    transform: translate(var(--sink-x, 0), var(--sink-y, 0)) scale(0.06);
+    opacity: 0;
+  }
+}
+
+.claim-error {
+  min-height: 0;
+  font-style: italic;
+  font-size: 13px;
+  color: var(--vermilion);
+  margin-top: 4px;
+}
+.claim-error:empty {
+  margin: 0;
+}
+
+.receipt .claim-name {
+  font-size: 22px;
+}
+.receipt-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.receipt-actions button {
+  font-family: 'IM Fell English', serif;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid rgba(34, 48, 59, 0.4);
+  padding: 6px 10px;
+  cursor: pointer;
+}
+.receipt-actions button:hover {
+  border-color: var(--vermilion);
+  color: var(--vermilion);
+}
+
+/* pressed states: buttons acknowledge the hand */
+.logbook-toggle:active,
+.receipt-actions button:active,
+.claim-card button[type='submit']:active,
+.first-note button:active {
+  transform: translateY(1px);
+}
+.claim-card button[type='submit']:active {
+  background: #16232c;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .claim-card,
+  .toast,
+  .logbook,
+  .first-note {
+    animation: none;
+  }
+  .claim-card.sinking {
+    animation: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+}
+
+@media (max-width: 520px) {
+  .chart-title {
+    top: 12px;
+    left: 12px;
+    padding: 8px 12px 7px;
+  }
+  .chart-title h1 {
+    font-size: 17px;
+  }
+  .first-note {
+    bottom: 18px;
+    font-size: 13px;
   }
 }

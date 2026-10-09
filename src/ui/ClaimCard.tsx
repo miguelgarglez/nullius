@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import type { Feature } from '../world/features';
 import type { Claim } from '../claims/ledger';
 
-// The naming card: a small paper slip pinned beside the pennant.
-// If the sailor has never signed the log, we ask for their name first —
-// the same card serves both moments.
+// The naming card: an annotation anchored beside the pennant. On success
+// it sinks into the chart (scale toward the feature) so the ink on the
+// map — not the form — is what remains.
 
 const KIND_NOUN: Record<string, string> = {
   island: 'island',
@@ -20,7 +20,9 @@ export function ClaimCard(props: {
   claim: Claim | undefined;
   sailor: string;
   busy: boolean;
+  error: string | null;
   taken: Claim | null;
+  sinking: { dx: number; dy: number } | null;
   onName: (name: string, sailor: string) => void;
   onClose: () => void;
   style: { left: number; top: number };
@@ -38,9 +40,21 @@ export function ClaimCard(props: {
   }, [feature.id, sailor]);
 
   const noun = KIND_NOUN[feature.kind] ?? 'place';
+  const sinkStyle = props.sinking
+    ? ({
+        ...props.style,
+        '--sink-x': `${props.sinking.dx}px`,
+        '--sink-y': `${props.sinking.dy}px`,
+      } as React.CSSProperties)
+    : props.style;
 
   return (
-    <div className="claim-card" style={props.style} role="dialog" aria-label={`Name this ${noun}`}>
+    <div
+      className={`claim-card${props.sinking ? ' sinking' : ''}`}
+      style={sinkStyle}
+      role="dialog"
+      aria-label={`Name this ${noun}`}
+    >
       {claim ? (
         <div className="claim-plaque">
           <div className="claim-name">{claim.name}</div>
@@ -88,11 +102,49 @@ export function ClaimCard(props: {
               </button>
             </>
           )}
+          <div className="claim-error" aria-live="assertive">
+            {props.error}
+          </div>
         </form>
       )}
       <button className="claim-close" onClick={props.onClose} aria-label="Close">
         ×
       </button>
+    </div>
+  );
+}
+
+// The receipt: what a confirmed claim leaves behind — name, surveyor,
+// coordinates, and a way to hand the view to someone else.
+export function Receipt(props: {
+  claim: Claim;
+  onClose: () => void;
+  style: { left: number; top: number };
+}) {
+  const [copied, setCopied] = useState(false);
+  const { claim } = props;
+  const copyLink = async () => {
+    const link = `${location.origin}${location.pathname}#${Math.round(claim.x)},${Math.round(claim.y)},1.6`;
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  };
+  return (
+    <div className="claim-card receipt" style={props.style} role="status" aria-live="polite">
+      <div className="claim-kicker">inked forever</div>
+      <div className="claim-plaque">
+        <div className="claim-name">{claim.name}</div>
+        <div className="claim-byline">
+          charted by <em>{claim.sailor}</em> · {Math.round(claim.x)}° {Math.round(claim.y)}′
+        </div>
+      </div>
+      <div className="receipt-actions">
+        <button onClick={copyLink}>{copied ? 'chart link copied' : 'copy chart link'}</button>
+        <button onClick={props.onClose}>sail on</button>
+      </div>
     </div>
   );
 }

@@ -31,10 +31,13 @@ export class WorldView {
   private queue: { lod: number; tx: number; ty: number }[] = [];
   private inQueue = new Set<string>();
   private raf = 0;
+  private lastT = 0;
+  private mq: MediaQueryList | null = null;
   private pointers = new Map<number, { x: number; y: number }>();
   private lastPinch = 0;
   private dragMoved = 0;
   private features: Feature[] = [];
+  private hovered: Feature | null = null;
   private claims = new Map<string, ClaimLike>();
   private claimBirth = new Map<string, number>();
   private ships: ShipLike[] = [];
@@ -48,7 +51,11 @@ export class WorldView {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d')!;
     this.onFeatures = onFeatures;
-    this.reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    this.mq = matchMedia('(prefers-reduced-motion: reduce)');
+    this.reduced = this.mq.matches;
+    const onMq = (e: MediaQueryListEvent) => (this.reduced = e.matches);
+    this.mq.addEventListener('change', onMq);
+    this.listeners.push(() => this.mq?.removeEventListener('change', onMq));
     this.bind();
     this.resize();
     this.raf = requestAnimationFrame(this.frame);
@@ -149,7 +156,27 @@ export class WorldView {
 
     this.listen(el, 'pointermove', (e) => {
       const p = this.pointers.get(e.pointerId);
-      if (!p) return;
+      if (!p) {
+        // hovering: signal which pennant is within reach
+        const rect = el.getBoundingClientRect();
+        const w = this.toWorld(e.clientX - rect.left, e.clientY - rect.top);
+        let best: Feature | null = null;
+        let bd = Infinity;
+        for (const f of this.features) {
+          const d = Math.hypot(f.x - w.x, f.y - w.y);
+          if (d < bd) {
+            bd = d;
+            best = f;
+          }
+        }
+        const reach = 30 / this.cam.scale;
+        const hov = best && bd < reach ? best : null;
+        if (hov !== this.hovered) {
+          this.hovered = hov;
+          el.style.cursor = hov ? 'pointer' : '';
+        }
+        return;
+      }
       const dx = e.clientX - p.x;
       const dy = e.clientY - p.y;
       p.x = e.clientX;
@@ -233,11 +260,16 @@ export class WorldView {
     this.raf = requestAnimationFrame(this.frame);
     const { cam, vel } = this;
 
-    // inertia when released
+    // inertia when released — dt-normalized so refresh rate doesn't
+    // change how the sea carries you
+    const now = performance.now();
+    const dt = Math.min(50, now - (this.lastT || now));
+    this.lastT = now;
     if (this.pointers.size === 0) {
-      cam.x += vel.x;
-      cam.y += vel.y;
-      const damp = this.reduced ? 0.82 : 0.94;
+      const dtn = dt / 16.67;
+      cam.x += vel.x * dtn;
+      cam.y += vel.y * dtn;
+      const damp = Math.pow(this.reduced ? 0.82 : 0.94, dtn);
       vel.x *= damp;
       vel.y *= damp;
       if (Math.abs(vel.x) + Math.abs(vel.y) < 0.001) {
@@ -282,15 +314,18 @@ export class WorldView {
           ctx.drawImage(t, tx * tw, ty * tw, tw, tw);
           this.tiles.delete(key);
           this.tiles.set(key, t); // touch for LRU
-        } else if (budget > 0) {
-          budget--;
-          const made = renderTile(lod, tx, ty);
-          this.tiles.set(key, made);
-          ctx.drawImage(made, tx * tw, ty * tw, tw, tw);
         } else {
-          // haze: the chart is still being drawn — a feature, not a spinner
-          this.drawHaze(ctx, tx * tw, ty * tw, tw, tx, ty);
-          if (!this.inQueue.has(key)) {
+          // refinement: draw the coarser parent stretched until the fine
+          // tile inks in — terrain stays present, never a blank rectangle
+          if (!this.drawParentTile(ctx, lod, tx, ty, tw)) {
+            this.drawHaze(ctx, tx * tw, ty * tw, tw, tx, ty);
+          }
+          if (budget > 0) {
+            budget--;
+            const made = renderTile(lod, tx, ty);
+            this.tiles.set(key, made);
+            ctx.drawImage(made, tx * tw, ty * tw, tw, tw);
+          } else if (!this.inQueue.has(key)) {
             this.inQueue.add(key);
             this.queue.push({ lod, tx, ty });
           }
@@ -335,6 +370,30 @@ export class WorldView {
     this.onFeatures(this.features);
   };
 
+  /** Draw the nearest cached ancestor tile covering (lod,tx,ty). */
+  private drawParentTile(
+    ctx: CanvasRenderingContext2D,
+    lod: number,
+    tx: number,
+    ty: number,
+    tw: number,
+  ): boolean {
+    for (let p = 1; p <= 4 && lod - p >= MIN_LOD; p++) {
+      const pw = tileWorld(lod - p);
+      const ptx = Math.floor((tx * tw) / pw);
+      const pty = Math.floor((ty * tw) / pw);
+      const t = this.tiles.get(`${lod - p}:${ptx}:${pty}`);
+      if (!t) continue;
+      // crop the child region out of the parent tile and stretch it over
+      const sx = ((tx * tw - ptx * pw) / pw) * 256;
+      const sy = ((ty * tw - pty * pw) / pw) * 256;
+      const ss = (tw / pw) * 256;
+      ctx.drawImage(t, sx, sy, ss, ss, tx * tw, ty * tw, tw, tw);
+      return true;
+    }
+    return false;
+  }
+
   private drawHaze(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, tx: number, ty: number) {
     ctx.fillStyle = '#ece3cd';
     ctx.fillRect(x, y, s, s);
@@ -359,34 +418,51 @@ export class WorldView {
       ctx.save();
       ctx.translate(lx, ly);
       if (claim) {
-        // engraved name plate — fresh names ink themselves in
+        // the survey mark: a benchmark cross at the exact point, forever
+        ctx.strokeStyle = 'rgba(34,48,59,0.8)';
+        ctx.lineWidth = px(0.9);
+        const bm = px(4.2);
+        ctx.beginPath();
+        ctx.arc(0, 0, bm, 0, Math.PI * 2);
+        ctx.moveTo(-bm * 1.5, 0);
+        ctx.lineTo(-bm * 0.6, 0);
+        ctx.moveTo(bm * 0.6, 0);
+        ctx.lineTo(bm * 1.5, 0);
+        ctx.moveTo(0, -bm * 1.5);
+        ctx.lineTo(0, -bm * 0.6);
+        ctx.moveTo(0, bm * 0.6);
+        ctx.lineTo(0, bm * 1.5);
+        ctx.stroke();
+
+        // the name inks letter by letter — a surveyor's hand, not a fade
         const birth = this.claimBirth.get(f.id);
         const age = birth ? performance.now() - birth : Infinity;
-        const t = this.reduced ? 1 : Math.min(1, age / 900);
-        const ease = 1 - (1 - t) * (1 - t) * (1 - t);
         const fs = Math.max(px(11), px(9) + f.prominence * px(6));
         ctx.font = `italic ${fs}px "EB Garamond", Georgia, serif`;
-        ctx.globalAlpha = ease;
         ctx.fillStyle = '#22303B';
-        ctx.textAlign = 'center';
-        ctx.fillText(claim.name, 0, px(-10) - (1 - ease) * px(3));
-        ctx.strokeStyle = 'rgba(34,48,59,0.5)';
-        ctx.lineWidth = px(0.8);
-        const twd = ctx.measureText(claim.name).width * ease;
-        ctx.beginPath();
-        ctx.moveTo(-twd / 2, px(-4));
-        ctx.lineTo(twd / 2, px(-4));
-        ctx.stroke();
-        ctx.globalAlpha = 1;
-        // a small vermilion seal while the ink is fresh
-        if (age < 120000) {
-          ctx.fillStyle = 'rgba(179,58,43,0.85)';
+        const chars = Math.ceil(Math.min(1, age / (this.reduced ? 1 : 1100)) * claim.name.length);
+        const shown = claim.name.slice(0, chars);
+        const fullW = ctx.measureText(claim.name).width;
+        ctx.textAlign = 'left';
+        const settle = chars < claim.name.length ? px(2) : 0;
+        ctx.fillText(shown, -fullW / 2, px(-12) + settle);
+        if (chars === claim.name.length) {
+          ctx.strokeStyle = 'rgba(34,48,59,0.5)';
+          ctx.lineWidth = px(0.8);
           ctx.beginPath();
-          ctx.arc(ctx.measureText(claim.name).width / 2 + px(8), px(-12), px(2.6), 0, Math.PI * 2);
-          ctx.fill();
+          ctx.moveTo(-fullW / 2, px(-6));
+          ctx.lineTo(fullW / 2, px(-6));
+          ctx.stroke();
+          if (age < 120000) {
+            ctx.fillStyle = 'rgba(179,58,43,0.85)';
+            ctx.beginPath();
+            ctx.arc(fullW / 2 + px(8), px(-14), px(2.6), 0, Math.PI * 2);
+            ctx.fill();
+          }
         }
       } else {
-        // uncharted pennant
+        // uncharted pennant — stirs when within reach
+        const hot = f === this.hovered;
         const s = px(1);
         ctx.strokeStyle = '#B33A2B';
         ctx.lineWidth = px(1.4);
@@ -396,11 +472,20 @@ export class WorldView {
         ctx.stroke();
         ctx.fillStyle = '#B33A2B';
         ctx.beginPath();
-        ctx.moveTo(0, -14 * s);
-        ctx.lineTo(9 * s, -11 * s);
-        ctx.lineTo(0, -8 * s);
+        const lift = hot ? px(2.5) : 0;
+        ctx.moveTo(0, -14 * s - lift);
+        ctx.lineTo(9 * s, -11 * s - lift);
+        ctx.lineTo(0, -8 * s - lift);
         ctx.closePath();
         ctx.fill();
+        if (hot) {
+          // a sounding-ring: the place acknowledges you
+          ctx.strokeStyle = 'rgba(179,58,43,0.5)';
+          ctx.lineWidth = px(1);
+          ctx.beginPath();
+          ctx.arc(0, 0, px(7), 0, Math.PI * 2);
+          ctx.stroke();
+        }
       }
       ctx.restore();
     }
