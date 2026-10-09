@@ -1,9 +1,11 @@
+import { useEffect, useState } from 'react';
 import type { Feature } from '../world/features';
 import type { Claim } from '../claims/ledger';
 
 // The logbook: every feature on the visible chart, listed as real DOM
 // controls. Keyboard and screen-reader sailors can chart a course and
-// name a place without ever touching the canvas.
+// name a place without ever touching the canvas. Rows carry their
+// bearing so two "uncharted rocks" are never indistinguishable.
 
 const KIND_LABEL: Record<string, string> = {
   island: 'island',
@@ -21,8 +23,42 @@ export function Logbook(props: {
   onToggle: () => void;
   onSail: (f: Feature) => void;
 }) {
+  // the panel lingers long enough to slip back out — closing is an
+  // exit, not a disappearance
+  const [rendered, setRendered] = useState(props.open);
+  const [leaving, setLeaving] = useState(false);
+  useEffect(() => {
+    if (props.open) {
+      setRendered(true);
+      setLeaving(false);
+      return;
+    }
+    if (!rendered) return;
+    setLeaving(true);
+    const t = setTimeout(() => {
+      setRendered(false);
+      setLeaving(false);
+    }, 220);
+    return () => clearTimeout(t);
+  }, [props.open, rendered]);
+
   const named = props.features.filter((f) => props.claims.has(f.id));
   const uncharted = props.features.filter((f) => !props.claims.has(f.id));
+  const row = (f: Feature, claimed: boolean) => (
+    <li key={f.id}>
+      <button onClick={() => props.onSail(f)}>
+        <span className="lb-what">
+          <span className={`lb-name${claimed ? '' : ' lb-uncharted'}`}>
+            {claimed ? props.claims.get(f.id)!.name : `uncharted ${KIND_LABEL[f.kind]}`}
+          </span>
+          <span className="lb-ref">
+            {Math.round(f.x)} · {Math.round(f.y)}
+          </span>
+        </span>
+        <span className="lb-kind">{claimed ? KIND_LABEL[f.kind] : 'name it →'}</span>
+      </button>
+    </li>
+  );
   return (
     <>
       <button
@@ -33,26 +69,12 @@ export function Logbook(props: {
       >
         logbook — places in view
       </button>
-      {props.open && (
-        <nav className="logbook" aria-label="Places in view">
+      {rendered && (
+        <nav className={`logbook${leaving ? ' leaving' : ''}`} aria-label="Places in view">
           <div className="logbook-head">places in view</div>
           <ul>
-            {named.map((f) => (
-              <li key={f.id}>
-                <button onClick={() => props.onSail(f)}>
-                  <span className="lb-name">{props.claims.get(f.id)!.name}</span>
-                  <span className="lb-kind">{KIND_LABEL[f.kind]}</span>
-                </button>
-              </li>
-            ))}
-            {uncharted.map((f) => (
-              <li key={f.id}>
-                <button onClick={() => props.onSail(f)}>
-                  <span className="lb-name lb-uncharted">uncharted {KIND_LABEL[f.kind]}</span>
-                  <span className="lb-kind">name it →</span>
-                </button>
-              </li>
-            ))}
+            {named.map((f) => row(f, true))}
+            {uncharted.map((f) => row(f, false))}
             {!props.features.length && <li className="lb-empty">open water — no landmarks in view</li>}
           </ul>
         </nav>

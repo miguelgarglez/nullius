@@ -57,6 +57,7 @@ export function ClaimCard(props: {
   taken: Claim | null;
   checking: boolean;
   sinking: { dx: number; dy: number } | null;
+  leaving?: boolean;
   onName: (name: string, sailor: string) => void;
   onClose: () => void;
   anchor: { sx: number; sy: number };
@@ -98,7 +99,7 @@ export function ClaimCard(props: {
   return (
     <div
       ref={cardRef}
-      className={`claim-card${props.sinking ? ' sinking' : ''}`}
+      className={`claim-card${props.sinking ? ' sinking' : ''}${props.leaving ? ' leaving' : ''}`}
       style={sinkStyle}
       role="dialog"
       aria-label={claim ? `${claim.name}` : `Name this ${noun}`}
@@ -111,7 +112,8 @@ export function ClaimCard(props: {
           <div className="claim-byline">charted by {claim.sailor}</div>
           {/* the reference IS the share control — copy the bearing */}
           <button className="ref-share" onClick={copyLink} title="copy a link to this spot">
-            ref {Math.round(feature.x)} · {Math.round(feature.y)} <span className="ref-mark">{copied === 'ok' ? '✓' : '⧉'}</span>
+            ref {Math.round(feature.x)} · {Math.round(feature.y)}{' '}
+            <span className="ref-mark" aria-live="polite">{copied === 'ok' ? 'copied' : '⧉'}</span>
           </button>
           {copied === 'fail' && (
             <input
@@ -185,6 +187,7 @@ export function ClaimCard(props: {
 // leader. It stays until dismissed; the bearing is always recoverable.
 export function Receipt(props: {
   claim: Claim;
+  leaving?: boolean;
   onClose: () => void;
   anchor: { sx: number; sy: number };
 }) {
@@ -202,7 +205,7 @@ export function Receipt(props: {
     }
   };
   return (
-    <div ref={ref} className="ledger-entry" role="status" aria-live="polite">
+    <div ref={ref} className={`ledger-entry${props.leaving ? ' leaving' : ''}`} role="status" aria-live="polite">
       <div className="le-kicker">ENTERED IN THE CHART</div>
       <div className="le-line">
         <em>{claim.name}</em>, charted by {claim.sailor}
@@ -211,7 +214,7 @@ export function Receipt(props: {
         {/* the reference IS the share control — copy the bearing */}
         <button className="ref-share" onClick={copyLink} title="copy a link to this spot">
           ref {Math.round(claim.x)} · {Math.round(claim.y)}{' '}
-          <span className="ref-mark">{copied === 'ok' ? '✓' : '⧉'}</span>
+          <span className="ref-mark" aria-live="polite">{copied === 'ok' ? 'copied' : '⧉'}</span>
         </button>
         <button className="sail-on" onClick={props.onClose}>
           sail on →

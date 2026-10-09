@@ -68,7 +68,7 @@ body,
 .chart-title h1 {
   font-family: 'EB Garamond', Georgia, serif;
   font-weight: 600;
-  font-size: 15px;
+  font-size: 20px;
   letter-spacing: 0.42em;
   margin: 0;
   color: var(--ink);
@@ -217,6 +217,58 @@ body,
   to {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
+  }
+}
+/* every layer that slips in also slips out — exits are entrances
+   played home */
+@keyframes slip-out {
+  to {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes slip-out-c {
+  to {
+    opacity: 0;
+    transform: translateX(-50%) translateY(6px);
+  }
+}
+.claim-card.leaving,
+.ledger-entry.leaving,
+.logbook.leaving {
+  animation: slip-out 0.2s ease-in forwards;
+}
+.first-note.leaving,
+.toast.leaving {
+  animation: slip-out-c 0.2s ease-in forwards;
+}
+/* while a naming tray is open on a small screen, a survey ring marks
+   the pennant it belongs to — the tray replaces the leader, the ring
+   keeps the link */
+.sel-anchor {
+  position: absolute;
+  display: none;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border: 1.5px solid var(--vermilion);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 28;
+  animation: anchor-breathe 1.6s ease-out infinite;
+}
+@keyframes anchor-breathe {
+  0% {
+    transform: scale(0.7);
+    opacity: 0.9;
+  }
+  70% {
+    transform: scale(1.5);
+    opacity: 0.25;
+  }
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
   }
 }
 /* survey notation — the working voice of the chart — sets itself apart
@@ -402,7 +454,11 @@ body,
   font-size: 11px;
   letter-spacing: 0.04em;
   color: var(--ink);
-  border-bottom: 1px dashed var(--rule) !important;
+  background: transparent;
+  border: none;
+  border-bottom: 1px dashed var(--rule);
+  padding: 0;
+  cursor: pointer;
 }
 .ref-share .ref-mark {
   color: var(--vermilion);
@@ -449,12 +505,23 @@ body,
   z-index: 25;
   animation: slip-in-c 0.3s var(--ease-out);
 }
-/* the live count turns over deliberately instead of swapping */
+/* the live count turns over deliberately instead of swapping — the new
+   figure rises into its seat */
 .ledger-line .count {
   display: inline-block;
   min-width: 1.4em;
   text-align: right;
-  animation: fade-in 0.5s ease-out;
+  animation: count-turn 0.45s var(--ease-out);
+}
+@keyframes count-turn {
+  from {
+    opacity: 0;
+    transform: translateY(0.45em);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 .toast::before {
   content: '※ ';
@@ -543,6 +610,17 @@ body,
   align-self: center;
   white-space: nowrap;
 }
+.logbook .lb-what {
+  display: flex;
+  flex-direction: column;
+}
+.logbook .lb-ref {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+  margin-top: 1px;
+}
 .logbook .lb-empty {
   padding: 10px 14px;
   font-style: italic;
@@ -578,7 +656,7 @@ input:focus-visible {
     padding: 3px 8px 6px;
   }
   .chart-title h1 {
-    font-size: 13px;
+    font-size: 16px;
   }
   .chart-title .sub {
     font-size: 10px;
@@ -614,7 +692,11 @@ input:focus-visible {
     width: 44px;
     height: 44px;
   }
-  /* naming becomes a bottom tray — the pennant stays visible above it */
+  /* naming becomes a bottom tray — the pennant stays visible above it,
+     marked by the breathing anchor ring */
+  .sel-anchor {
+    display: block;
+  }
   .claim-card {
     left: 10px !important;
     right: 10px;
@@ -707,6 +789,7 @@ input:focus-visible {
   .logbook,
   .first-note,
   .ledger-entry,
+  .sel-anchor,
   .ledger-line .count {
     animation: none;
   }

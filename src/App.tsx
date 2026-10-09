@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { WebHaptics } from 'web-haptics';
 import { WorldView } from './engine/world';
 import { findHarbor, featuresInBox, type Feature } from './world/features';
 import {
@@ -32,9 +33,12 @@ function safeRead(key: string): string {
     return '';
   }
 }
-function buzz(pattern: number | number[]) {
+// web-haptics covers Android's vibrate and iOS Safari's hidden-switch
+// click; the honourable opt-out lives in the sailing note
+const haptics = new WebHaptics();
+function buzz(kind: 'success' | 'error' | 'nudge') {
   try {
-    if (safeRead(HAPTICS_KEY) !== 'off') navigator.vibrate?.(pattern);
+    if (safeRead(HAPTICS_KEY) !== 'off') void haptics.trigger(kind);
   } catch {
     /* no haptics */
   }
@@ -87,6 +91,15 @@ export default function App() {
   const [noteDismissed, setNoteDismissed] = useState(false);
   const featSigRef = useRef('');
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const toastFade = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [toastLeaving, setToastLeaving] = useState(false);
+  // transient layers leave the way they arrived: after the state flips
+  // off they stay mounted one beat, playing the exit
+  const lastSel = useRef<Anchored | null>(null);
+  const lastRcpt = useRef<{ f: Feature; claim: Claim; sx: number; sy: number } | null>(null);
+  const cardSank = useRef(false); // a sinking card's exit IS the sink
+  const [selLeaving, setSelLeaving] = useState<Anchored | null>(null);
+  const [rcptLeaving, setRcptLeaving] = useState<{ f: Feature; claim: Claim; sx: number; sy: number } | null>(null);
   const ceremonyTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const spawnRef = useRef<{ x: number; y: number } | null>(null);
   const lastInput = useRef<'key' | 'ptr'>('ptr');
@@ -181,8 +194,16 @@ export default function App() {
       pushClaim(c);
       if (isNew) {
         setToast(`${c.name} — charted by ${c.sailor}`);
+        setToastLeaving(false);
         if (toastTimer.current) clearTimeout(toastTimer.current);
-        toastTimer.current = setTimeout(() => setToast(null), 5000);
+        if (toastFade.current) clearTimeout(toastFade.current);
+        toastTimer.current = setTimeout(() => {
+          setToastLeaving(true);
+          toastFade.current = setTimeout(() => {
+            setToast(null);
+            setToastLeaving(false);
+          }, 220);
+        }, 5000);
       }
     });
     loadClaims().then((m) => {
@@ -258,6 +279,7 @@ export default function App() {
       clearInterval(linkTimer);
       clearCeremony();
       if (toastTimer.current) clearTimeout(toastTimer.current);
+      if (toastFade.current) clearTimeout(toastFade.current);
       v.destroy();
       viewRef.current = null;
     };
@@ -274,7 +296,8 @@ export default function App() {
       safeStore(SAILOR_KEY, who);
       setSailor(who);
       setNamed(true);
-      buzz(12);
+      buzz('success');
+      cardSank.current = true; // the sink is the card's own exit
       // under reduced motion the ceremony arrives already settled —
       // no sink, no letter-by-letter wait, no plaque flash
       const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -316,7 +339,7 @@ export default function App() {
         return cur;
       });
     } else {
-      buzz([20, 40, 20]);
+      buzz('error');
       setCardError(res.reason === 'offline' ? 'no signal — the ledger is unreachable' : 'the ink would not take — try again');
     }
   };
@@ -367,7 +390,31 @@ export default function App() {
     }
   }, [features, claims, named, noteDismissed, selected, ledgerReady]);
 
-  const selClaim = selected ? claims.get(selected.f.id) : undefined;
+  if (selected) lastSel.current = selected;
+  if (receipt) lastRcpt.current = receipt;
+  useEffect(() => {
+    if (selected || !lastSel.current) return;
+    const gone = lastSel.current;
+    lastSel.current = null;
+    if (cardSank.current) {
+      cardSank.current = false;
+      return;
+    }
+    setSelLeaving(gone);
+    const t = setTimeout(() => setSelLeaving(null), 240);
+    return () => clearTimeout(t);
+  }, [selected]);
+  useEffect(() => {
+    if (receipt || !lastRcpt.current) return;
+    const gone = lastRcpt.current;
+    lastRcpt.current = null;
+    setRcptLeaving(gone);
+    const t = setTimeout(() => setRcptLeaving(null), 240);
+    return () => clearTimeout(t);
+  }, [receipt]);
+  const shownCard = selected ?? selLeaving;
+  const shownRcpt = receipt ?? rcptLeaving;
+  const selClaim = shownCard ? claims.get(shownCard.f.id) : undefined;
   // the logbook lists the places you could actually reach for right now:
   // on screen and not sitting under the title, note, or controls
   const logbookFeatures = features.filter((f) => {
@@ -413,9 +460,16 @@ export default function App() {
           )}
         </p>
       </header>
-      {selected && (
+      {shownCard && (
+        <div
+          className="sel-anchor"
+          style={{ left: shownCard.sx, top: shownCard.sy }}
+          aria-hidden="true"
+        />
+      )}
+      {shownCard && (
         <ClaimCard
-          feature={selected.f}
+          feature={shownCard.f}
           claim={sinking ? undefined : selClaim}
           sailor={sailor}
           busy={busy}
@@ -423,16 +477,19 @@ export default function App() {
           taken={taken}
           checking={!ledgerReady && online}
           sinking={sinking}
+          leaving={!selected}
           onName={onName}
           onClose={() => {
             clearCeremony();
             setSelected(null);
             ref.current?.focus();
           }}
-          anchor={selected}
+          anchor={shownCard}
         />
       )}
-      {receipt && <Receipt claim={receipt.claim} onClose={() => setReceipt(null)} anchor={receipt} />}
+      {shownRcpt && (
+        <Receipt claim={shownRcpt.claim} leaving={!receipt} onClose={() => setReceipt(null)} anchor={shownRcpt} />
+      )}
       <Logbook
         open={logOpen}
         features={logbookFeatures}
@@ -447,7 +504,7 @@ export default function App() {
         }}
       />
       {toast && (
-        <div className="toast" role="status" aria-live="polite">
+        <div className={`toast${toastLeaving ? ' leaving' : ''}`} role="status" aria-live="polite">
           {toast}
         </div>
       )}

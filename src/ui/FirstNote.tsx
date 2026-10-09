@@ -39,10 +39,25 @@ export function FirstNote(props: {
       return 'sail';
     }
   });
+  // a returning visitor's note is already retired — never mounted
+  const [leaving, setLeaving] = useState(false);
+  const [gone, setGone] = useState(step === 'done');
+  const coarse = useState(() => {
+    try {
+      return matchMedia('(pointer: coarse)').matches;
+    } catch {
+      return false;
+    }
+  })[0];
+  const zoomVerb = coarse ? 'pinch' : 'scroll or pinch';
 
   // the "?" button calls the note back — the full card, not just one step
   useEffect(() => {
-    if (props.nudge > 0) setStep('help');
+    if (props.nudge > 0) {
+      setStep('help');
+      setLeaving(false);
+      setGone(false);
+    }
   }, [props.nudge]);
 
   useEffect(() => {
@@ -62,14 +77,27 @@ export function FirstNote(props: {
     }
   }, [props.named, step]);
 
-  if (step === 'done' || props.dismissed) return null;
+  // retiring — the note slips back out instead of vanishing
+  useEffect(() => {
+    if (step !== 'done' || gone) return;
+    setLeaving(true);
+    const t = setTimeout(() => setGone(true), 240);
+    return () => clearTimeout(t);
+  }, [step, gone]);
+
+  const dismiss = () => {
+    setLeaving(true);
+    setTimeout(() => props.onDismiss(true), 200);
+  };
+
+  if (gone || props.dismissed) return null;
   return (
-    <div className="first-note" role="note">
+    <div className={`first-note${leaving ? ' leaving' : ''}`} role="note">
       <span className="fn-mark">※</span>
       {step === 'sail' && (
         <span>
           a <b>red pennant</b> is a place you can name — forever, for everyone · <b>drag</b> to sail ·{' '}
-          <b>scroll or pinch</b> to zoom
+          <b>{zoomVerb}</b> to zoom
         </span>
       )}
       {step === 'name' && (
@@ -80,7 +108,7 @@ export function FirstNote(props: {
       )}
       {step === 'help' && (
         <span>
-          <b>drag</b> to sail · <b>scroll or pinch</b> to zoom · <b>tap a red pennant</b> to name a place
+          <b>drag</b> to sail · <b>{zoomVerb}</b> to zoom · <b>tap a red pennant</b> to name a place
           forever — the <b>logbook</b> lists everything in view ·{' '}
           <button
             className="fn-haptics"
@@ -94,7 +122,7 @@ export function FirstNote(props: {
           </button>
         </span>
       )}
-      <button onClick={() => props.onDismiss(true)} aria-label="Dismiss">
+      <button onClick={dismiss} aria-label="Dismiss">
         ×
       </button>
     </div>
